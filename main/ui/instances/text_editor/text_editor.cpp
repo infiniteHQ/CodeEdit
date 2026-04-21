@@ -38,18 +38,18 @@ void TextEditorAppWindow::PlusMinuxWidget(bool plus) {
 
   CherryGUI::AddRectFilled(dl, btn_min, btn_max, bg_color, rounding);
 
-  CherryGUI::AddRect(dl, btn_min, btn_max, IM_COL32(120, 120, 120, 180), rounding, 0,
-              1.0f);
+  CherryGUI::AddRect(dl, btn_min, btn_max, IM_COL32(120, 120, 120, 180),
+                     rounding, 0, 1.0f);
 
   ImU32 fg_color = IM_COL32(220, 220, 220, 255);
 
-  CherryGUI::AddRectFilled(dl, 
-      ImVec2(center.x - bar_half, center.y - bar_thickness * 0.5f),
+  CherryGUI::AddRectFilled(
+      dl, ImVec2(center.x - bar_half, center.y - bar_thickness * 0.5f),
       ImVec2(center.x + bar_half, center.y + bar_thickness * 0.5f), fg_color);
 
   if (plus) {
-    CherryGUI::AddRectFilled(dl, 
-        ImVec2(center.x - bar_thickness * 0.5f, center.y - bar_half),
+    CherryGUI::AddRectFilled(
+        dl, ImVec2(center.x - bar_thickness * 0.5f, center.y - bar_half),
         ImVec2(center.x + bar_thickness * 0.5f, center.y + bar_half), fg_color);
   }
 }
@@ -80,6 +80,8 @@ TextEditorAppWindow::TextEditorAppWindow(const std::string &path,
 
   this->ctx = VortexMaker::GetCurrentContext();
 }
+
+void TextEditorAppWindow::SetLanguage(const std::string &name) {}
 
 std::string TextEditorAppWindow::GetFileTypeStr(FileTypes type) {
   switch (type) {
@@ -331,6 +333,7 @@ FileTypes TextEditorAppWindow::detect_file(const std::string &path) {
       {"json", FileTypes::File_JSON},
       {"yaml", FileTypes::File_YAML},
       {"yml", FileTypes::File_YAML},
+      {"cpp", FileTypes::File_CPP},
 
       // Config
       {"cfg", FileTypes::File_CFG},
@@ -439,6 +442,10 @@ void TextEditorAppWindow::Render() {
     this->m_AppWindow->SetSaved(false);
   } else {
     this->m_AppWindow->SetSaved(true);
+  }
+
+  if (m_Type == FileTypes::File_CPP) {
+    editor.SetProperty("language_name", "C++");
   }
 
   if (editor.GetData("save_ready") == "true") {

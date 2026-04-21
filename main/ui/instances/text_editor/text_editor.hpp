@@ -31,6 +31,8 @@ enum class FileTypes {
   File_TEMP,
   File_DATA,
 
+  File_CPP,
+
   // Other
   File_UNKNOWN,
 };
@@ -65,6 +67,9 @@ public:
   void SaveFile();
   void Undo();
   void Redo();
+
+  void SetLanguage(const std::string &name);
+  void AutoSetLanguage();
 
   void PlusMinuxWidget(bool plus);
   float m_TextSize = 0.5f;

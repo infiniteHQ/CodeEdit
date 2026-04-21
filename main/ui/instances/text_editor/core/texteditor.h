@@ -1880,6 +1880,10 @@ public:
       SetProperty("paste_pending", false);
     }
 
+    if (GetProperty("language_name") == "C++") {
+      m_TextEditor.SetLanguage(TextEditor::Language::Cpp());
+    }
+
     if (m_FontSize)
       CherryStyle::PushFontSize(*m_FontSize);
 

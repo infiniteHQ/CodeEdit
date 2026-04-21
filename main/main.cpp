@@ -16,12 +16,8 @@ public:
 
     // Add item handler for simple txt files
     this->AddContentBrowserItemHandler(ItemHandlerInterface(
-        "file_txt", TextEdit::StartTextEditorInstance, "Edit",
-        "Edit this txt file", TextEdit::GetPath("resources/icons/edit.png")));
-
-    this->AddContentBrowserItemHandler(ItemHandlerInterface(
-        "text_edit:superfile", TextEdit::StartTextEditorInstance, "Super Edit",
-        "Edit this txt file", TextEdit::GetPath("resources/icons/edit.png")));
+        "file_cpp", TextEdit::StartTextEditorInstance, "Edit",
+        "Edit this C++ file", TextEdit::GetPath("resources/icons/edit.png")));
 
     this->AddContentBrowserItemIdentifier(ItemIdentifierInterface(
         TextEdit::IsValidFile, "text_edit:superfile", "Super file", "#553333"));
