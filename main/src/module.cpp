@@ -1,11 +1,11 @@
 #include "module.hpp"
 
 void TextEdit::CreateContext() {
-  TextEdit::Context *ctx = VX_NEW(TextEdit::Context);
+  TextEdit::Context *ctx = new (TextEdit::Context);
   CTextEdit = ctx;
 }
 
-void TextEdit::DestroyContext() { VX_FREE(CTextEdit); }
+void TextEdit::DestroyContext() { free(CTextEdit); }
 
 bool TextEdit::IsValidFile(const std::string &path) {
   namespace fs = std::filesystem;
@@ -42,7 +42,7 @@ void TextEdit::StartTextEditorInstance(const std::string &path) {
 }
 
 std::string TextEdit::GetPath(const std::string &path) {
-  return CTextEdit->m_interface->CookPath(path);
+  return CTextEdit->m_interface->cook_path(path);
 }
 
-void TextEdit::Hello() { VortexMaker::LogInfo("Tt", "cc"); }
+void TextEdit::Hello() { vxe::log_info("Tt", "cc"); }

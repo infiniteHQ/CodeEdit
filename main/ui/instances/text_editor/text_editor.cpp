@@ -78,7 +78,7 @@ TextEditorAppWindow::TextEditorAppWindow(const std::string &path,
 
   RefreshFile();
 
-  this->ctx = VortexMaker::GetCurrentContext();
+  this->ctx = vxe::get_current_context();
 }
 
 void TextEditorAppWindow::SetLanguage(const std::string &name) {}
@@ -365,7 +365,7 @@ void TextEditorAppWindow::RenderCustomMenu() { CherryGUI::Text("Helo"); }
 
 void TextEditorAppWindow::Render() {
 
-  VortexMaker::PushCustomMenu("TextEdit", [this]() { RenderCustomMenu(); });
+  vxe::push_custom_menu("TextEdit", [this]() { RenderCustomMenu(); });
 
   CherryApp.PushComponentPool(&m_ComponentPool);
   bool isWindowFocused =

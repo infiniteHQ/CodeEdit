@@ -1,7 +1,7 @@
 #include "../ui/instances/text_editor/text_editor.hpp"
 #include <vxcore/include/vortex.h>
 #include <vxcore/include/vortex_internals.h>
-#include <vxgui/editor/app/src/editor.hpp>
+#include <vxgui/editor/main/editor.hpp>
 
 #ifndef SAMPLE_MODULE_HPP
 #define SAMPLE_MODULE_HPP

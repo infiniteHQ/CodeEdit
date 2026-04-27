@@ -12,21 +12,32 @@ public:
 
     // Get the interface pointer
     CTextEdit->m_interface =
-        ModuleInterface::GetEditorModuleByName(this->m_name);
+        ModuleInterface::get_editor_module_by_name(this->name());
 
-    // Add item handler for simple txt files
-    this->AddContentBrowserItemHandler(ItemHandlerInterface(
+    this->add_content_browser_item_handler(ItemHandlerInterface(
         "file_cpp", TextEdit::StartTextEditorInstance, "Edit",
         "Edit this C++ file", TextEdit::GetPath("resources/icons/edit.png")));
+    this->add_content_browser_item_handler(
+        ItemHandlerInterface("file_hpp", TextEdit::StartTextEditorInstance,
+                             "Edit", "Edit this C++ header file",
+                             TextEdit::GetPath("resources/icons/edit.png")));
+    this->add_content_browser_item_handler(
+        ItemHandlerInterface("file_c", TextEdit::StartTextEditorInstance,
+                             "Edit", "Edit this C header file",
+                             TextEdit::GetPath("resources/icons/edit.png")));
+    this->add_content_browser_item_handler(
+        ItemHandlerInterface("file_h", TextEdit::StartTextEditorInstance,
+                             "Edit", "Edit this C header file",
+                             TextEdit::GetPath("resources/icons/edit.png")));
 
-    this->AddContentBrowserItemIdentifier(ItemIdentifierInterface(
+    this->add_content_browser_item_identifier(ItemIdentifierInterface(
         TextEdit::IsValidFile, "text_edit:superfile", "Super file", "#553333"));
 
-    this->SetCreditsFile(TextEdit::GetPath("CREDITS"));
-    this->AddDocumentation("Take the editor", "Edit a txt file",
-                           TextEdit::GetPath("docs/main.md"));
-    this->AddDocumentation("Take the editor", "Find specific text",
-                           TextEdit::GetPath("docs/main.md"));
+    this->set_credits_file(TextEdit::GetPath("CREDITS"));
+    this->add_documentation("Take the editor", "Edit a txt file",
+                            TextEdit::GetPath("docs/main.md"));
+    this->add_documentation("Take the editor", "Find specific text",
+                            TextEdit::GetPath("docs/main.md"));
   }
 
   void init_ui() override {
@@ -37,7 +48,7 @@ public:
 
   void destroy() override {
     // Reset module
-    this->ResetModule();
+    this->reset_module();
 
     // Clear windows
     for (auto i : CTextEdit->m_text_editor_instances) {

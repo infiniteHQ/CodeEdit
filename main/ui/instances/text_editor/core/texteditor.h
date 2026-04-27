@@ -1884,6 +1884,10 @@ public:
       m_TextEditor.SetLanguage(TextEditor::Language::Cpp());
     }
 
+    // TODO : Parameter
+    m_TextEditor.SetShowSpacesEnabled(false);
+    m_TextEditor.SetShowScrollbarMiniMapEnabled(true);
+
     if (m_FontSize)
       CherryStyle::PushFontSize(*m_FontSize);
 

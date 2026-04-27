@@ -99,7 +99,7 @@ public:
   }
 
 private:
-  VxContext *ctx;
+  std::shared_ptr<VxContext> ctx;
   bool opened;
   std::string m_FileEditBuffer;
   std::string m_FilePath;
