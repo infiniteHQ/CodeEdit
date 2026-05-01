@@ -31,8 +31,11 @@ target_compile_options(module PRIVATE -Wall -Wextra)
 endif()
 
 target_link_libraries(module PRIVATE ${VORTEX_SHARED_LIBRARY})
-target_include_directories(module PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/lib/vortex/vxcore/include/)
-target_include_directories(module PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/lib/vortex/)
+target_include_directories(module PUBLIC
+${CMAKE_CURRENT_SOURCE_DIR}/lib/vortex/
+${CMAKE_CURRENT_SOURCE_DIR}/lib/vortex/vxcore/include/
+${CMAKE_CURRENT_SOURCE_DIR}/lib/vortex/lib/cherry
+)
 
 if(WIN32)
     target_compile_definitions(module PRIVATE
@@ -47,7 +50,7 @@ if(WIN32)
             ${CMAKE_CURRENT_SOURCE_DIR}/lib/vortex/build/prod/Debug
     )
     if(NOT CHERRY_IMPORT_LIB)
-        message(FATAL_ERROR "cherry.lib introuvable, rebuilde vortex d'abord!")
+        message(FATAL_ERROR "cherry.lib not builded, please build Vortex before")
     endif()
     target_link_libraries(module PRIVATE ${CHERRY_IMPORT_LIB})
 endif()

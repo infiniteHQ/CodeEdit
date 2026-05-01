@@ -16,8 +16,10 @@
 #include <algorithm>
 #include <array>
 #include <chrono>
+#include <cmath>
 #include <functional>
 #include <iterator>
+#include <limits>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -25,10 +27,7 @@
 #include <unordered_set>
 #include <vector>
 
-#include "../../../../../lib/vortex/lib/cherry/cherry.hpp"
-#include "../../../../../lib/vortex/lib/cherry/platform/engine/app/app.hpp"
-#include "../../../../../lib/vortex/lib/cherry/platform/engine/components/components.hpp"
-
+#include <cherry.hpp>
 #include <vxcore/include/vortex.h>
 #include <vxcore/include/vortex_internals.h>
 
