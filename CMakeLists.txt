@@ -68,10 +68,12 @@ foreach(OUTPUTCONFIG Debug Release RelWithDebInfo MinSizeRel)
     set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_${OUTPUTCONFIG} ${CMAKE_BINARY_DIR}/bin/${OUTPUTCONFIG})
 endforeach()
 
+if(WIN32)
 set_target_properties(module PROPERTIES
     COMPILE_PDB_NAME "module"
     COMPILE_PDB_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/$<CONFIG>"
 )
+endif()
 
 # Script to remove existing resources
 file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/remove_resources_if_exists.cmake
@@ -80,7 +82,8 @@ file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/remove_resources_if_exists.cmake
 "endif()\n"
 )
 
-# Custom target to sync assets
+# Custom target to sync assets (and pdb files for Windows)
+if(WIN32)
 add_custom_target(sync_assets_editor ALL
     COMMAND ${CMAKE_COMMAND} -E echo "Synchronizing assets..."
     COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_BINARY_DIR}/remove_resources_if_exists.cmake
@@ -93,3 +96,14 @@ add_custom_target(sync_assets_editor ALL
     COMMAND ${CMAKE_COMMAND} -E echo "Assets synchronized."
     DEPENDS ${ASSET_FILES} module
 )
+else()
+add_custom_target(sync_assets_editor ALL
+    COMMAND ${CMAKE_COMMAND} -E echo "Synchronizing assets..."
+    COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_BINARY_DIR}/remove_resources_if_exists.cmake
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${CMAKE_CURRENT_SOURCE_DIR}/main/assets
+        $<TARGET_FILE_DIR:module>/
+    COMMAND ${CMAKE_COMMAND} -E echo "Assets synchronized."
+    DEPENDS ${ASSET_FILES} module
+)
+endif()
