@@ -6,7 +6,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 if (MSVC)
-    add_compile_options(/utf-8)
+    add_compile_options(/utf-8 /Zi /Od /Ob0)
+    add_link_options(/DEBUG /PDB:module.pdb)
 else()
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -fPIC")
 endif()
@@ -67,6 +68,11 @@ foreach(OUTPUTCONFIG Debug Release RelWithDebInfo MinSizeRel)
     set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_${OUTPUTCONFIG} ${CMAKE_BINARY_DIR}/bin/${OUTPUTCONFIG})
 endforeach()
 
+set_target_properties(module PROPERTIES
+    COMPILE_PDB_NAME "module"
+    COMPILE_PDB_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/$<CONFIG>"
+)
+
 # Script to remove existing resources
 file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/remove_resources_if_exists.cmake
 "if(EXISTS \"${CMAKE_BINARY_DIR}/bin/$<CONFIG>/resources\")\n"
@@ -81,6 +87,9 @@ add_custom_target(sync_assets_editor ALL
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         ${CMAKE_CURRENT_SOURCE_DIR}/main/assets
         $<TARGET_FILE_DIR:module>/
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        $<TARGET_FILE_DIR:module>/module.pdb
+        $<TARGET_FILE_DIR:module>/module.pdb
     COMMAND ${CMAKE_COMMAND} -E echo "Assets synchronized."
     DEPENDS ${ASSET_FILES} module
 )

@@ -19,8 +19,7 @@ set "timestr=%timestr: =0%"
 set /a "random_num=%random% %% 9000 + 1000"
 
 set "SESSION_ID=editor-%datestr%-%timestr%-%random_num%"
-
-set "SESSION_ARG=--session_id="%SESSION_ID%""
+set "SESSION_ARG=--session_id=%SESSION_ID%"
 
 echo SESSION_ID=%SESSION_ID%
 echo SESSION_ARG=%SESSION_ARG%
@@ -29,6 +28,6 @@ cd /d "%PROJECT_PATH%"
 
 call "%VORTEX_PATH%\handle_crash.bat" ^
   "%USERPROFILE%\.vx\sessions\%SESSION_ID%\crash\core_dumped.txt" ^
-  "%VORTEX_PATH%\vortex.exe --editor %SESSION_ARG%" ^
+  ""%VORTEX_PATH%\vortex.exe" --editor %SESSION_ARG%" ^
   __END__ ^
-  "%VORTEX_PATH%\vortex.exe --crash %SESSION_ARG%"
+  ""%VORTEX_PATH%\vortex.exe" --crash %SESSION_ARG%"
