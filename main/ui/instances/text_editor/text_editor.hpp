@@ -31,7 +31,12 @@ enum class FileTypes {
   File_TEMP,
   File_DATA,
 
+  File_SQL,
+  File_LUA,
+  File_PYTHON,
+  File_CS,
   File_CPP,
+  File_C,
 
   // Other
   File_UNKNOWN,
@@ -120,6 +125,11 @@ private:
   bool m_RefreshReady = false;
 
   bool m_AutoRefresh = false;
+  bool show_spaces_ = false;
+  bool show_scrollbar_minimap_ = false;
+  bool show_minimap_ = false;
+  bool word_wrap_ = false;
+  bool line_folding_ = false;
   std::filesystem::file_time_type m_LastWriteTime{};
 
   // Cherry

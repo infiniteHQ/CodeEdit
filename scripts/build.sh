@@ -13,7 +13,7 @@ make
 MODULE_JSON_PATH="../module.json"
 NAME=$(jq -r .name $MODULE_JSON_PATH)
 VERSION=$(jq -r .version $MODULE_JSON_PATH)
-FOLDER_NAME="$NAME-$VERSION"
+FOLDER_NAME="$NAME-$VERSION-linux"
 
 mkdir -p "../dist/$FOLDER_NAME"
 

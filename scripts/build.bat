@@ -18,7 +18,7 @@ cd ..\scripts
 set MODULE_JSON_PATH=..\module.json
 for /f "delims=" %%i in ('powershell -command "(Get-Content '%MODULE_JSON_PATH%' | ConvertFrom-Json).name"') do set NAME=%%i
 for /f "delims=" %%i in ('powershell -command "(Get-Content '%MODULE_JSON_PATH%' | ConvertFrom-Json).version"') do set VERSION=%%i
-set FOLDER_NAME=%NAME%-%VERSION%
+set FOLDER_NAME=%NAME%-%VERSION%-win
 
 mkdir "..\dist\%FOLDER_NAME%"
 

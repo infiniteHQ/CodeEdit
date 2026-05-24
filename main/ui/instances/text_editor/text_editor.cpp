@@ -444,8 +444,23 @@ void TextEditorAppWindow::Render() {
     this->m_AppWindow->SetSaved(true);
   }
 
+  // TODO: If not langauge set by the user
   if (m_Type == FileTypes::File_CPP) {
     editor.SetProperty("language_name", "C++");
+  } else if (m_Type == FileTypes::File_C) {
+    editor.SetProperty("language_name", "C");
+  } else if (m_Type == FileTypes::File_LUA) {
+    editor.SetProperty("language_name", "Lua");
+  } else if (m_Type == FileTypes::File_PYTHON) {
+    editor.SetProperty("language_name", "Python");
+  } else if (m_Type == FileTypes::File_CS) {
+    editor.SetProperty("language_name", "C#");
+  } else if (m_Type == FileTypes::File_JSON) {
+    editor.SetProperty("language_name", "Json");
+  } else if (m_Type == FileTypes::File_SQL) {
+    editor.SetProperty("language_name", "Sql");
+  } else {
+    // TODO : Extend this module languages support to plugins (or modules)
   }
 
   if (editor.GetData("save_ready") == "true") {
@@ -498,6 +513,36 @@ void TextEditorAppWindow::Render() {
     }
   }
 
+  if (show_spaces_) {
+    editor.SetProperty("show_spaces", "true");
+  } else {
+    editor.SetProperty("show_spaces", "false");
+  }
+
+  if (show_scrollbar_minimap_) {
+    editor.SetProperty("show_scrollbar_minimap", "true");
+  } else {
+    editor.SetProperty("show_scrollbar_minimap", "false");
+  }
+
+  if (show_minimap_) {
+    editor.SetProperty("show_minimap", "true");
+  } else {
+    editor.SetProperty("show_minimap", "false");
+  }
+
+  if (word_wrap_) {
+    editor.SetProperty("word_wrap", "true");
+  } else {
+    editor.SetProperty("word_wrap", "false");
+  }
+
+  if (line_folding_) {
+    editor.SetProperty("line_folding", "true");
+  } else {
+    editor.SetProperty("line_folding", "false");
+  }
+
   if (m_RefreshReady) {
     RefreshFile();
     editor.SetProperty("refresh_pending", "true");
@@ -548,7 +593,7 @@ void TextEditorAppWindow::RenderRightMenubar() {
     CherryGUI::PopStyleVar();
   };
 
-  ImVec2 popupSize(220, 63);
+  ImVec2 popupSize(320, 0);
   ImVec2 mousePos = CherryGUI::GetMousePos();
   ImVec2 popupPos = ImVec2(mousePos.x - popupSize.x, mousePos.y + 5);
 
@@ -572,7 +617,13 @@ void TextEditorAppWindow::RenderRightMenubar() {
     auto cmp = CherryKit::TableSimple(
         CherryID("Parameters"), "ParamTable",
         {{CherryKit::KeyValCustom("Zoom", zoomRender)},
-         {CherryKit::KeyValBool("Auto refresh", &m_AutoRefresh)}});
+         {CherryKit::KeyValBool("Auto refresh", &m_AutoRefresh)},
+         {CherryKit::KeyValBool("Show spaces", &show_spaces_)},
+         {CherryKit::KeyValBool("Show scrollbar minimap",
+                                &show_scrollbar_minimap_)},
+         {CherryKit::KeyValBool("Show Minimap", &show_minimap_)},
+         {CherryKit::KeyValBool("Word wrapping", &word_wrap_)},
+         {CherryKit::KeyValBool("Line Folding", &line_folding_)}});
 
     CherryGUI::EndPopup();
   }

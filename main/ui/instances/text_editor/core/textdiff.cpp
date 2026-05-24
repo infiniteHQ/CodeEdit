@@ -1,32 +1,24 @@
-//	TextDiff - A syntax highlighting text diff widget for Dear CherryGUI.
+//	textdiff.cpp
+//  Sources for diff features
+//
 //	Copyright (c) 2024-2026 Johan A. Goossens
 //	Copyright (c) 2026 Diego E. Moreno
 //	Copyright (c) 2026 Infinite
-//
-//	This work is licensed under the terms of the MIT license.
-//	For a copy, see <https://opensource.org/licenses/MIT>.
-
-//
-//	Include files
-//
 
 #include <cmath>
 
 #include <cherry.hpp>
+#include <vxcore/include/vortex.h>
+#include <vxcore/include/vortex_internals.h>
 
 #include "dtl.h"
 #include "textdiff.h"
 
-namespace ModuleUI {
 //
 //	TextDiff::TextDiff
 //
 
-TextDiff::TextDiff() {
-  readOnly = true;
-  showLineNumbers = false;
-  showMatchingBrackets = false;
-}
+TextDiff::TextDiff() { SetPalette(TextEditorInternal::GetDefaultPalette()); }
 
 //
 //	TextDiff::SetText
@@ -40,63 +32,35 @@ void TextDiff::SetText(const std::string_view &left,
   splitLines(leftLines, left);
   splitLines(rightLines, right);
 
-  // create two documents and colorize them
-  leftDocument.setText(leftLines);
-  rightDocument.setText(rightLines);
+  // create two documents
+  diff.leftDocument.setText(diff.config, leftLines);
+  diff.rightDocument.setText(diff.config, rightLines);
 
-  colorizer.updateEntireDocument(leftDocument, language);
-  colorizer.updateEntireDocument(rightDocument, language);
-
-  // setup line number decoration
-  leftLineNumberDigits =
-      static_cast<int>(std::log10(leftDocument.lineCount() + 1) + 1.0f);
-  rightLineNumberDigits =
-      static_cast<int>(std::log10(leftDocument.lineCount() + 1) + 1.0f);
-  decoratorWidth = -(leftLineNumberDigits + rightLineNumberDigits + 4.0f);
-
-  decoratorCallback = [this](TextEditor::Decorator &decorator) {
-    this->decorateLine(decorator);
-  };
-
-  // calculate the difference
-  dtl::Diff<std::string_view> diff(leftLines, rightLines);
-  diff.compose();
-  auto ranges = diff.getSes().getSequence();
+  // calculate the difference between the two documents
+  dtl::Diff<std::string_view> difference(leftLines, rightLines);
+  difference.compose();
+  auto ranges = difference.getSes().getSequence();
 
   // determine status of each line in diff view
-  lineInfo.clear();
+  diff.state.clear();
   size_t leftIndex = 0;
   size_t rightIndex = 0;
 
   for (auto &[text, info] : ranges) {
     switch (info.type) {
     case dtl::SES_COMMON:
-      lineInfo.emplace_back(leftIndex++, rightIndex++, LineStatus::common);
+      diff.state.emplace_back(leftIndex++, rightIndex++, DiffType::common);
       break;
 
     case dtl::SES_ADD:
-      lineInfo.emplace_back(leftIndex, rightIndex++, LineStatus::added);
+      diff.state.emplace_back(leftIndex, rightIndex++, DiffType::added);
       break;
 
     case dtl::SES_DELETE:
-      lineInfo.emplace_back(leftIndex++, rightIndex, LineStatus::deleted);
+      diff.state.emplace_back(leftIndex++, rightIndex, DiffType::deleted);
       break;
     }
   }
-
-  // set flag
-  updated = true;
-}
-
-//
-//	TextDiff::SetLanguage
-//
-
-void TextDiff::SetLanguage(const Language *l) {
-  language = l;
-  colorizer.updateEntireDocument(leftDocument, language);
-  colorizer.updateEntireDocument(rightDocument, language);
-  updated = true;
 }
 
 //
@@ -104,19 +68,931 @@ void TextDiff::SetLanguage(const Language *l) {
 //
 
 void TextDiff::Render(const char *title, const ImVec2 &size, bool border) {
-  if (sideBySideMode) {
+  // update color palette (if required)
+  if (diff.paletteAlpha != ImGui::GetStyle().Alpha) {
+    updatePalette();
+  }
+
+  // update colorizer states (if required)
+  diff.leftColorizer.update(diff.config, diff.leftDocument);
+  diff.rightColorizer.update(diff.config, diff.rightDocument);
+
+  // ensure editor has focus (if required)
+  if (diff.focusOnDiff) {
+    ImGui::SetNextWindowFocus();
+    diff.focusOnDiff = false;
+  }
+
+  if (diff.sideBySideMode) {
     // render a custom side-by-side view
-    renderSideBySide(title, size, border);
+    sideBySideView.render(title, size, border, diff);
 
   } else {
-    // create a combined view (if required)
-    if (updated) {
-      createCombinedView();
-      updated = false;
+    // render combined view
+    integratedView.render(title, size, border, diff);
+  }
+
+  // reset view mode
+  diff.previousSideBySideMode = diff.sideBySideMode;
+
+  // reset document state (if required)
+  if (diff.leftDocument.isUpdated()) {
+    diff.leftDocument.resetUpdated();
+  }
+
+  if (diff.rightDocument.isUpdated()) {
+    diff.rightDocument.resetUpdated();
+  }
+}
+
+//
+//	TextDiff::IntegratedView::render
+//
+
+void TextDiff::IntegratedView::render(const char *title, const ImVec2 &size,
+                                      bool border, Diff &diff) {
+  // get font information
+  font = ImGui::GetFont();
+  fontSize = ImGui::GetFontSize();
+  glyphSize =
+      ImVec2(ImGui::CalcTextSize("#").x,
+             ImGui::GetTextLineHeightWithSpacing() * diff.config.lineSpacing);
+
+  // determine flags
+
+  ImGuiWindowFlags windowFlags = ImGuiWindowFlags_HorizontalScrollbar |
+                                 ImGuiWindowFlags_NoNavInputs |
+                                 ImGuiWindowFlags_NoMove;
+
+  // start rendering the widget
+  ImGui::SetNextWindowContentSize(ImVec2(0.0f, glyphSize.y * rows.size()));
+  ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.0f, 0.0f));
+  ImGui::PushStyleColor(ImGuiCol_ChildBg,
+                        ImGui::ColorConvertU32ToFloat4(diff.palette.get(
+                            TextEditorInternal::Color::background)));
+  ImGui::BeginChild(title, size, false, windowFlags);
+
+  // determine visible dimensions
+  cursorScreenPos = ImGui::GetCursorScreenPos();
+  auto visibleSize = ImGui::GetContentRegionAvail();
+
+  leftLineNumberDigits =
+      static_cast<int>(std::log10(diff.leftDocument.size() + 1) + 1.0f);
+  rightLineNumberDigits =
+      static_cast<int>(std::log10(diff.rightDocument.size() + 1) + 1.0f);
+  lineNumberWidth =
+      glyphSize.x * (leftLineNumberDigits + rightLineNumberDigits + 3);
+
+  textColumnWidth = visibleSize.x - lineNumberWidth;
+  textColumnWidth = std::floor(textColumnWidth / glyphSize.x) * glyphSize.x;
+  diff.config.wordWrapColumns =
+      static_cast<size_t>(std::max(textColumnWidth / glyphSize.x, 0.0f));
+
+  // update typesetters and update layout (if required)
+  bool layoutChanged = false;
+  layoutChanged |=
+      leftTypeSetter.update(diff.config, diff.leftDocument, leftLineFold);
+  layoutChanged |=
+      rightTypeSetter.update(diff.config, diff.rightDocument, rightLineFold);
+  bool viewChanged = diff.sideBySideMode != diff.previousSideBySideMode;
+
+  if (layoutChanged | viewChanged) {
+    updateLayout(diff);
+  }
+
+  // determine layout parameters
+  lineNumberPos = cursorScreenPos.x;
+  textPos = lineNumberPos + lineNumberWidth;
+  textEnd = textPos + textColumnWidth;
+
+  visibleRows =
+      std::max(static_cast<int>(std::ceil(visibleSize.y / glyphSize.y)), 0);
+  visibleColumns =
+      std::max(static_cast<int>(std::ceil(textColumnWidth / glyphSize.x)), 0);
+
+  firstVisibleRow = std::max(
+      static_cast<int>(std::floor(ImGui::GetScrollY() / glyphSize.y)), 0);
+  lastVisibleRow =
+      std::min(static_cast<int>(std::ceil(
+                   (ImGui::GetScrollY() + visibleSize.y) / glyphSize.y)),
+               static_cast<int>(rows.size() - 1));
+  firstVisibleColumn =
+      std::max(static_cast<int>(std::floor(textScroll / glyphSize.x)), 0);
+  lastVisibleColumn =
+      static_cast<int>(std::ceil((textScroll + textColumnWidth) / glyphSize.x));
+  firstRenderableColumn =
+      (firstVisibleColumn / diff.config.tabSize) * diff.config.tabSize;
+
+  renderBackground(diff);
+  renderText(diff);
+  renderScrollbar();
+  renderMiniMap(diff);
+
+  ImGui::EndChild();
+  ImGui::PopStyleColor();
+  ImGui::PopStyleVar();
+}
+
+//
+//	TextDiff::IntegratedView::renderBackground
+//
+
+void TextDiff::IntegratedView::renderBackground(Diff &diff) {
+  // render line numbers and text backgrounds
+  auto drawList = ImGui::GetWindowDrawList();
+  auto y = cursorScreenPos.y + firstVisibleRow * glyphSize.y;
+  char buffer[32];
+
+  for (auto i = firstVisibleRow; i <= lastVisibleRow; i++) {
+    auto &row = rows[i];
+
+    auto lineLeft = static_cast<int>(row.leftLine + 1);
+    auto lineRight = static_cast<int>(row.rightLine + 1);
+
+    switch (row.type) {
+    case DiffType::common:
+      if (row.section == 0) {
+        snprintf(buffer, sizeof(buffer), " %*d %*d", leftLineNumberDigits,
+                 lineLeft, rightLineNumberDigits, lineRight);
+        drawList->AddText(
+            ImVec2(lineNumberPos, y),
+            diff.palette.get(TextEditorInternal::Color::lineNumber), buffer);
+      }
+
+      break;
+
+    case DiffType::added:
+      if (row.section == 0) {
+        snprintf(buffer, sizeof(buffer), " %*s %*d +", leftLineNumberDigits, "",
+                 rightLineNumberDigits, lineRight);
+        drawList->AddText(
+            ImVec2(lineNumberPos, y),
+            diff.palette.get(TextEditorInternal::Color::lineNumber), buffer);
+      }
+
+      drawList->AddRectFilled(ImVec2(lineNumberPos, y),
+                              ImVec2(textEnd, y + glyphSize.y),
+                              diff.addedColor);
+      break;
+
+    case DiffType::deleted:
+      if (row.section == 0) {
+        snprintf(buffer, sizeof(buffer), " %*d %*s -", leftLineNumberDigits,
+                 lineLeft, rightLineNumberDigits, "");
+        drawList->AddText(
+            ImVec2(lineNumberPos, y),
+            diff.palette.get(TextEditorInternal::Color::lineNumber), buffer);
+      }
+
+      drawList->AddRectFilled(ImVec2(lineNumberPos, y),
+                              ImVec2(textEnd, y + glyphSize.y),
+                              diff.deletedColor);
+
+      break;
     }
 
-    // render combined view as a normal read-only text editor
-    TextEditor::render(title, size, border);
+    y += glyphSize.y;
+  }
+}
+
+//
+//	TextDiff::IntegratedView::renderText
+//
+
+void TextDiff::IntegratedView::renderText(Diff &diff) {
+  // setup rendering
+  auto drawList = ImGui::GetWindowDrawList();
+  auto yTop = drawList->GetClipRectMin().y;
+  auto yBottom = drawList->GetClipRectMax().y;
+
+  if (maxColumns * glyphSize.x > textColumnWidth) {
+    yBottom -= ImGui::GetStyle().ScrollbarSize +
+               ImGui::GetCurrentWindow()->WindowBorderSize;
+  }
+
+  // render left text
+  drawList->PushClipRect(ImVec2(textPos, yTop), ImVec2(textEnd, yBottom),
+                         false);
+
+  for (auto i = firstVisibleRow; i <= lastVisibleRow; i++) {
+    auto &row = rows[i];
+    auto y = cursorScreenPos.y + i * glyphSize.y;
+
+    switch (row.type) {
+    case DiffType::common:
+    case DiffType::deleted:
+      renderLine(textPos, y, diff.leftDocument[row.leftLine], row.section,
+                 diff);
+      break;
+
+    case DiffType::added:
+      renderLine(textPos, y, diff.rightDocument[row.rightLine], row.section,
+                 diff);
+      break;
+    }
+  }
+
+  drawList->PopClipRect();
+}
+
+//
+//	TextDiff::IntegratedView::renderLine
+//
+
+void TextDiff::IntegratedView::renderLine(float x, float y,
+                                          TextEditorInternal::Line &line,
+                                          size_t sectionNo, Diff &diff) {
+  // draw colored glyphs for specified line
+  auto drawList = ImGui::GetWindowDrawList();
+
+  // determine visible boundaries for this row
+  size_t index;
+  size_t column;
+  size_t endColumn;
+
+  if (diff.config.wordWrap && line.sections) {
+    auto &section = line.sections->at(sectionNo);
+    index = section.startIndex;
+    column = section.indent;
+    endColumn = section.columns;
+
+  } else {
+    index = 0;
+    column = 0;
+    endColumn = line.columns;
+  }
+
+  // only process all visible columns
+  while (column < endColumn && column <= lastVisibleColumn) {
+    auto &glyph = line[index++];
+    auto codepoint = glyph.codepoint;
+    ImVec2 glyphPos(x + column * glyphSize.x - textScroll, y);
+
+    // handle tabs
+    if (codepoint == '\t') {
+      if (diff.config.showTabs && column >= firstRenderableColumn) {
+        const auto x1 = glyphPos.x + glyphSize.x * 0.3f;
+        const auto y1 = glyphPos.y + fontSize * 0.5f;
+        const auto x2 = glyphPos.x + glyphSize.x;
+
+        ImVec2 p1, p2, p3, p4;
+        p1 = ImVec2(x1, y1);
+        p2 = ImVec2(x2, y1);
+        p3 = ImVec2(x2 - fontSize * 0.16f, y1 - fontSize * 0.16f);
+        p4 = ImVec2(x2 - fontSize * 0.16f, y1 + fontSize * 0.16f);
+
+        drawList->AddLine(
+            p1, p2, diff.palette.get(TextEditorInternal::Color::whitespace));
+        drawList->AddLine(
+            p2, p3, diff.palette.get(TextEditorInternal::Color::whitespace));
+        drawList->AddLine(
+            p2, p4, diff.palette.get(TextEditorInternal::Color::whitespace));
+      }
+
+      column += diff.config.tabSize - (column % diff.config.tabSize);
+
+      // handle spaces
+    } else if (codepoint == ' ') {
+      if (diff.config.showSpaces && column >= firstRenderableColumn) {
+        const auto x1 = glyphPos.x + glyphSize.x * 0.5f;
+        const auto y1 = glyphPos.y + fontSize * 0.5f;
+        drawList->AddCircleFilled(
+            ImVec2(x1, y1), 1.5f,
+            diff.palette.get(TextEditorInternal::Color::whitespace), 4);
+      }
+
+      column++;
+
+      // handle regular glyphs
+    } else {
+      if (column >= firstRenderableColumn) {
+        font->RenderChar(drawList, fontSize, glyphPos,
+                         diff.palette.get(glyph.color), codepoint);
+      }
+
+      column++;
+    }
+  }
+}
+
+//
+//	TextDiff::IntegratedView::renderScrollbar
+//
+
+void TextDiff::IntegratedView::renderScrollbar() {
+  auto maxColumnsWidth = maxColumns * glyphSize.x;
+
+  if (maxColumnsWidth > textColumnWidth) {
+    auto window = ImGui::GetCurrentWindow();
+    const ImRect outerRect = window->Rect();
+    auto borderSize = std::round(window->WindowBorderSize * 0.5f);
+    auto scrollbarSize = ImGui::GetStyle().ScrollbarSize;
+
+    auto scrollbarTop = std::max(outerRect.Min.y + borderSize,
+                                 outerRect.Max.y - borderSize - scrollbarSize);
+    ImRect scrollbarFrame(textPos, scrollbarTop, textEnd,
+                          scrollbarTop + scrollbarSize);
+    ImS64 scroll = static_cast<ImS64>(textScroll);
+
+    if (ImGui::ScrollbarEx(
+            scrollbarFrame, ImGui::GetID("textScroll"), ImGuiAxis_X, &scroll,
+            static_cast<ImS64>(textColumnWidth),
+            static_cast<ImS64>(maxColumnsWidth), ImDrawFlags_RoundCornersAll)) {
+
+      textScroll = static_cast<float>(scroll);
+    }
+
+    if (ImGui::IsWindowFocused()) {
+      textScroll = std::clamp(textScroll - ImGui::GetIO().MouseWheelH *
+                                               ImGui::GetFontSize(),
+                              0.0f, maxColumnsWidth - textColumnWidth);
+
+      if (ImGui::IsKeyPressed(ImGuiKey_LeftArrow)) {
+        textScroll = std::max(textScroll - glyphSize.x, 0.0f);
+
+      } else if (ImGui::IsKeyPressed(ImGuiKey_RightArrow)) {
+        textScroll = std::min(textScroll + glyphSize.x,
+                              maxColumnsWidth - textColumnWidth);
+
+      } else if (ImGui::IsKeyPressed(ImGuiKey_Home)) {
+        textScroll = 0.0f;
+
+      } else if (ImGui::IsKeyPressed(ImGuiKey_End)) {
+        textScroll = maxColumnsWidth - textColumnWidth;
+      }
+    }
+
+  } else {
+    // no scrolling if the text fits
+    textScroll = 0.0f;
+  }
+
+  if (ImGui::IsWindowFocused()) {
+    if (ImGui::IsKeyPressed(ImGuiKey_UpArrow)) {
+      if (ImGui::IsKeyDown(ImGuiKey_ModCtrl)) {
+        ImGui::SetScrollY(0.0f);
+
+      } else {
+        ImGui::SetScrollY(std::max(ImGui::GetScrollY() - glyphSize.y, 0.0f));
+      }
+
+    } else if (ImGui::IsKeyPressed(ImGuiKey_DownArrow)) {
+      if (ImGui::IsKeyDown(ImGuiKey_ModCtrl)) {
+        ImGui::SetScrollY(ImGui::GetScrollMaxY());
+
+      } else {
+        ImGui::SetScrollY(std::min(ImGui::GetScrollY() + glyphSize.y,
+                                   ImGui::GetScrollMaxY()));
+      }
+
+    } else if (ImGui::IsKeyPressed(ImGuiKey_PageUp)) {
+      ImGui::SetScrollY(std::max(
+          ImGui::GetScrollY() - (visibleRows - 2) * glyphSize.y, 0.0f));
+
+    } else if (ImGui::IsKeyPressed(ImGuiKey_PageDown)) {
+      ImGui::SetScrollY(
+          std::min(ImGui::GetScrollY() + (visibleRows - 2) * glyphSize.y,
+                   ImGui::GetScrollMaxY()));
+    }
+  }
+}
+
+//
+//	TextDiff::IntegratedView::renderMiniMap
+//
+
+void TextDiff::IntegratedView::renderMiniMap(Diff &diff) {
+  // based on https://github.com/ocornut/imgui/issues/3114
+  if (diff.config.showScrollbarMiniMap) {
+    auto window = ImGui::GetCurrentWindow();
+
+    if (window->ScrollbarY) {
+      auto drawList = ImGui::GetWindowDrawList();
+      auto rect = ImGui::GetWindowScrollbarRect(window, ImGuiAxis_Y);
+      auto rowHeight = rect.GetHeight() / static_cast<float>(rows.size());
+      auto offset = (rect.Max.x - rect.Min.x) * 0.3f;
+      auto left = rect.Min.x + offset;
+      auto right = rect.Max.x - offset;
+
+      drawList->PushClipRect(rect.Min, rect.Max, false);
+
+      // render diff locations
+      for (size_t i = 0; i < rows.size(); i++) {
+        auto &row = rows[i];
+
+        if (row.type != DiffType::common) {
+          auto color = (row.type == DiffType::added) ? diff.addedColor
+                                                     : diff.deletedColor;
+          auto ly = std::round(rect.Min.y + i * rowHeight);
+          drawList->AddRectFilled(ImVec2(left, ly),
+                                  ImVec2(right, ly + rowHeight), color);
+        }
+      }
+
+      drawList->PopClipRect();
+    }
+  }
+}
+
+//
+//	TextDiff::IntegratedView::updateLayout
+//
+
+void TextDiff::IntegratedView::updateLayout(Diff &diff) {
+  rows.clear();
+  maxColumns = 0;
+
+  for (auto &lineState : diff.state) {
+    auto &line = lineState.type == DiffType::added
+                     ? diff.rightDocument[lineState.rightLine]
+                     : diff.leftDocument[lineState.leftLine];
+
+    if (line.rows > 10) {
+      line.rows = 10;
+    }
+
+    for (size_t i = 0; i < line.rows; i++) {
+      rows.emplace_back(lineState.type, lineState.leftLine, lineState.rightLine,
+                        i, line.columns);
+    }
+
+    maxColumns = std::max(maxColumns, line.columns);
+  }
+}
+
+//
+//	TextDiff::SideBySideView::render
+//
+
+void TextDiff::SideBySideView::render(const char *title, const ImVec2 &size,
+                                      bool border, Diff &diff) {
+  // get font information
+  font = ImGui::GetFont();
+  fontSize = ImGui::GetFontSize();
+  glyphSize =
+      ImVec2(ImGui::CalcTextSize("#").x,
+             ImGui::GetTextLineHeightWithSpacing() * diff.config.lineSpacing);
+
+  // determine flags
+  ImGuiWindowFlags windowFlags =
+      ImGuiWindowFlags_HorizontalScrollbar | ImGuiWindowFlags_NoNavInputs;
+
+  // start rendering the widget
+  ImGui::SetNextWindowContentSize(ImVec2(0.0f, glyphSize.y * rows.size()));
+  ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.0f, 0.0f));
+  ImGui::PushStyleColor(ImGuiCol_ChildBg,
+                        ImGui::ColorConvertU32ToFloat4(diff.palette.get(
+                            TextEditorInternal::Color::background)));
+  ImGui::BeginChild(title, size, false, windowFlags);
+
+  // determine visible dimensions
+  cursorScreenPos = ImGui::GetCursorScreenPos();
+  auto visibleSize = ImGui::GetContentRegionAvail();
+
+  leftLineNumberDigits =
+      static_cast<int>(std::log10(diff.leftDocument.size() + 1) + 1.0f);
+  rightLineNumberDigits =
+      static_cast<int>(std::log10(diff.rightDocument.size() + 1) + 1.0f);
+  leftLineNumberWidth = glyphSize.x * (leftLineNumberDigits + 4);
+  rightLineNumberWidth = glyphSize.x * (rightLineNumberDigits + 4);
+
+  textColumnWidth = static_cast<float>(visibleSize.x - leftLineNumberWidth -
+                                       rightLineNumberWidth) /
+                    2.0f;
+  textColumnWidth = std::floor(textColumnWidth / glyphSize.x) * glyphSize.x;
+  diff.config.wordWrapColumns =
+      static_cast<size_t>(std::max(textColumnWidth / glyphSize.x, 0.0f));
+
+  // update typesetters and update layout (if required)
+  bool layoutChanged = false;
+  layoutChanged |=
+      leftTypeSetter.update(diff.config, diff.leftDocument, leftLineFold);
+  layoutChanged |=
+      rightTypeSetter.update(diff.config, diff.rightDocument, rightLineFold);
+  bool viewChanged = diff.sideBySideMode != diff.previousSideBySideMode;
+
+  if (layoutChanged | viewChanged) {
+    updateLayout(diff);
+  }
+
+  // determine layout parameters
+  leftLineNumberPos = cursorScreenPos.x;
+  leftTextPos = leftLineNumberPos + leftLineNumberWidth;
+  rightLineNumberPos = leftTextPos + textColumnWidth;
+  rightTextPos = rightLineNumberPos + rightLineNumberWidth;
+  rightTextEnd = rightTextPos + textColumnWidth;
+
+  visibleRows =
+      std::max(static_cast<int>(std::ceil(visibleSize.y / glyphSize.y)), 0);
+  visibleColumns =
+      std::max(static_cast<int>(std::ceil(textColumnWidth / glyphSize.x)), 0);
+
+  firstVisibleRow = std::max(
+      static_cast<int>(std::floor(ImGui::GetScrollY() / glyphSize.y)), 0);
+  lastVisibleRow =
+      std::min(static_cast<int>(std::floor(
+                   (ImGui::GetScrollY() + visibleSize.y) / glyphSize.y)),
+               static_cast<int>(rows.size() - 1));
+  firstVisibleColumn =
+      std::max(static_cast<int>(std::floor(textScroll / glyphSize.x)), 0);
+  lastVisibleColumn = static_cast<int>(
+      std::floor((textScroll + textColumnWidth) / glyphSize.x));
+  firstRenderableColumn =
+      (firstVisibleColumn / diff.config.tabSize) * diff.config.tabSize;
+
+  renderBackground(diff);
+  renderText(diff);
+  renderScrollbars();
+  renderMiniMap(diff);
+
+  ImGui::EndChild();
+  ImGui::PopStyleColor();
+  ImGui::PopStyleVar();
+}
+
+//
+//	TextDiff::SideBySideView::renderBackground
+//
+
+void TextDiff::SideBySideView::renderBackground(Diff &diff) {
+  // render line numbers and text backgrounds
+  auto drawList = ImGui::GetWindowDrawList();
+  auto y = cursorScreenPos.y + firstVisibleRow * glyphSize.y;
+  char buffer[32];
+
+  for (auto i = firstVisibleRow; i <= lastVisibleRow; i++) {
+    auto &row = rows[i];
+
+    auto lineLeft = static_cast<int>(row.leftLine + 1);
+    auto lineRight = static_cast<int>(row.rightLine + 1);
+
+    switch (row.type) {
+    case DiffType::common:
+      if (row.leftSection == 0) {
+        snprintf(buffer, sizeof(buffer), " %*d", leftLineNumberDigits,
+                 lineLeft);
+        drawList->AddText(
+            ImVec2(leftLineNumberPos, y),
+            diff.palette.get(TextEditorInternal::Color::lineNumber), buffer);
+        snprintf(buffer, sizeof(buffer), " %*d", rightLineNumberDigits,
+                 lineRight);
+        drawList->AddText(
+            ImVec2(rightLineNumberPos, y),
+            diff.palette.get(TextEditorInternal::Color::lineNumber), buffer);
+      }
+
+      break;
+
+    case DiffType::added:
+      if (row.rightSection == 0) {
+        snprintf(buffer, sizeof(buffer), " %*d +", rightLineNumberDigits,
+                 lineRight);
+        drawList->AddText(
+            ImVec2(rightLineNumberPos, y),
+            diff.palette.get(TextEditorInternal::Color::lineNumber), buffer);
+      }
+
+      drawList->AddRectFilled(ImVec2(rightTextPos, y),
+                              ImVec2(rightTextEnd, y + glyphSize.y),
+                              diff.addedColor);
+
+      break;
+
+    case DiffType::deleted:
+      if (row.leftSection == 0) {
+        snprintf(buffer, sizeof(buffer), " %*d -", leftLineNumberDigits,
+                 lineLeft);
+        drawList->AddText(
+            ImVec2(leftLineNumberPos, y),
+            diff.palette.get(TextEditorInternal::Color::lineNumber), buffer);
+      }
+
+      drawList->AddRectFilled(ImVec2(leftTextPos, y),
+                              ImVec2(rightLineNumberPos, y + glyphSize.y),
+                              diff.deletedColor);
+
+      break;
+    }
+
+    y += glyphSize.y;
+  }
+}
+
+//
+//	TextDiff::SideBySideView::renderText
+//
+
+void TextDiff::SideBySideView::renderText(Diff &diff) {
+  // setup rendering
+  auto drawList = ImGui::GetWindowDrawList();
+  auto yTop = drawList->GetClipRectMin().y;
+  auto yBottom = drawList->GetClipRectMax().y;
+
+  if (maxColumns * glyphSize.x > textColumnWidth) {
+    yBottom -= ImGui::GetStyle().ScrollbarSize +
+               ImGui::GetCurrentWindow()->WindowBorderSize;
+  }
+
+  // render left text
+  drawList->PushClipRect(ImVec2(leftTextPos, yTop),
+                         ImVec2(rightLineNumberPos, yBottom), false);
+
+  for (auto i = firstVisibleRow; i <= lastVisibleRow; i++) {
+    auto &row = rows[i];
+    auto y = cursorScreenPos.y + i * glyphSize.y;
+
+    switch (row.type) {
+    case DiffType::common:
+    case DiffType::deleted:
+      renderLine(leftTextPos, y, diff.leftDocument[row.leftLine],
+                 row.leftSection, diff);
+      break;
+
+    case DiffType::added:
+      break;
+    }
+  }
+
+  drawList->PopClipRect();
+
+  // render right text
+  drawList->PushClipRect(ImVec2(rightTextPos, yTop),
+                         ImVec2(rightTextEnd, yBottom), false);
+
+  for (auto i = firstVisibleRow; i <= lastVisibleRow; i++) {
+    auto &row = rows[i];
+    auto y = cursorScreenPos.y + i * glyphSize.y;
+
+    switch (row.type) {
+    case DiffType::common:
+    case DiffType::added:
+      renderLine(rightTextPos, y, diff.rightDocument[row.rightLine],
+                 row.rightSection, diff);
+      break;
+
+    case DiffType::deleted:
+      break;
+    }
+  }
+
+  drawList->PopClipRect();
+}
+
+//
+//	TextDiff::SideBySideView::renderLine
+//
+
+void TextDiff::SideBySideView::renderLine(float x, float y,
+                                          TextEditorInternal::Line &line,
+                                          size_t sectionNo, Diff &diff) {
+  // draw colored glyphs for specified line
+  auto drawList = ImGui::GetWindowDrawList();
+
+  // determine visible boundaries for this row
+  size_t index;
+  size_t column;
+  size_t endColumn;
+
+  if (diff.config.wordWrap && line.sections) {
+    auto &section = line.sections->at(sectionNo);
+    index = section.startIndex;
+    column = section.indent;
+    endColumn = section.columns;
+
+  } else {
+    index = 0;
+    column = 0;
+    endColumn = line.columns;
+  }
+
+  // only process all visible columns
+  while (column < endColumn && column <= lastVisibleColumn) {
+    auto &glyph = line[index++];
+    auto codepoint = glyph.codepoint;
+    ImVec2 glyphPos(x + column * glyphSize.x - textScroll, y);
+
+    // handle tabs
+    if (codepoint == '\t') {
+      if (diff.config.showTabs && column >= firstRenderableColumn) {
+        const auto x1 = glyphPos.x + glyphSize.x * 0.3f;
+        const auto y1 = glyphPos.y + fontSize * 0.5f;
+        const auto x2 = glyphPos.x + glyphSize.x;
+
+        ImVec2 p1, p2, p3, p4;
+        p1 = ImVec2(x1, y1);
+        p2 = ImVec2(x2, y1);
+        p3 = ImVec2(x2 - fontSize * 0.16f, y1 - fontSize * 0.16f);
+        p4 = ImVec2(x2 - fontSize * 0.16f, y1 + fontSize * 0.16f);
+
+        drawList->AddLine(
+            p1, p2, diff.palette.get(TextEditorInternal::Color::whitespace));
+        drawList->AddLine(
+            p2, p3, diff.palette.get(TextEditorInternal::Color::whitespace));
+        drawList->AddLine(
+            p2, p4, diff.palette.get(TextEditorInternal::Color::whitespace));
+      }
+
+      column += diff.config.tabSize - (column % diff.config.tabSize);
+
+      // handle spaces
+    } else if (codepoint == ' ') {
+      if (diff.config.showSpaces && column >= firstRenderableColumn) {
+        const auto x1 = glyphPos.x + glyphSize.x * 0.5f;
+        const auto y1 = glyphPos.y + fontSize * 0.5f;
+        drawList->AddCircleFilled(
+            ImVec2(x1, y1), 1.5f,
+            diff.palette.get(TextEditorInternal::Color::whitespace), 4);
+      }
+
+      column++;
+
+      // handle regular glyphs
+    } else {
+      if (column >= firstRenderableColumn) {
+        font->RenderChar(drawList, fontSize, glyphPos,
+                         diff.palette.get(glyph.color), codepoint);
+      }
+
+      column++;
+    }
+  }
+}
+
+//
+//	TextDiff::SideBySideView::renderScrollbars
+//
+
+void TextDiff::SideBySideView::renderScrollbars() {
+  auto maxColumnsWidth = maxColumns * glyphSize.x;
+
+  if (maxColumnsWidth > textColumnWidth) {
+    auto window = ImGui::GetCurrentWindow();
+    const ImRect outerRect = window->Rect();
+    auto borderSize = std::round(window->WindowBorderSize * 0.5f);
+    auto scrollbarSize = ImGui::GetStyle().ScrollbarSize;
+
+    auto scrollbarTop = std::max(outerRect.Min.y + borderSize,
+                                 outerRect.Max.y - borderSize - scrollbarSize);
+    ImRect leftScrollbarFrame(leftTextPos, scrollbarTop, rightLineNumberPos,
+                              scrollbarTop + scrollbarSize);
+    ImRect rightScrollbarFrame(rightTextPos, scrollbarTop, rightTextEnd,
+                               scrollbarTop + scrollbarSize);
+    ImS64 scroll = static_cast<ImS64>(textScroll);
+
+    if (ImGui::ScrollbarEx(
+            leftScrollbarFrame, ImGui::GetID("leftTextScroll"), ImGuiAxis_X,
+            &scroll, static_cast<ImS64>(textColumnWidth),
+            static_cast<ImS64>(maxColumnsWidth), ImDrawFlags_RoundCornersAll)) {
+
+      textScroll = static_cast<float>(scroll);
+    }
+
+    if (ImGui::ScrollbarEx(
+            rightScrollbarFrame, ImGui::GetID("rightTextScroll"), ImGuiAxis_X,
+            &scroll, static_cast<ImS64>(textColumnWidth),
+            static_cast<ImS64>(maxColumnsWidth), ImDrawFlags_RoundCornersAll)) {
+
+      textScroll = static_cast<float>(scroll);
+    }
+
+    if (ImGui::IsWindowFocused()) {
+      textScroll = std::clamp(textScroll - ImGui::GetIO().MouseWheelH *
+                                               ImGui::GetFontSize(),
+                              0.0f, maxColumnsWidth - textColumnWidth);
+
+      if (ImGui::IsKeyPressed(ImGuiKey_LeftArrow)) {
+        textScroll = std::max(textScroll - glyphSize.x, 0.0f);
+
+      } else if (ImGui::IsKeyPressed(ImGuiKey_RightArrow)) {
+        textScroll = std::min(textScroll + glyphSize.x,
+                              maxColumnsWidth - textColumnWidth);
+
+      } else if (ImGui::IsKeyPressed(ImGuiKey_Home)) {
+        textScroll = 0.0f;
+
+      } else if (ImGui::IsKeyPressed(ImGuiKey_End)) {
+        textScroll = maxColumnsWidth - textColumnWidth;
+      }
+    }
+
+  } else {
+    // no scrolling if the text fits
+    textScroll = 0.0f;
+  }
+
+  if (ImGui::IsWindowFocused()) {
+    if (ImGui::IsKeyPressed(ImGuiKey_UpArrow)) {
+      if (ImGui::IsKeyDown(ImGuiKey_ModCtrl)) {
+        ImGui::SetScrollY(0.0f);
+
+      } else {
+        ImGui::SetScrollY(std::max(ImGui::GetScrollY() - glyphSize.y, 0.0f));
+      }
+
+    } else if (ImGui::IsKeyPressed(ImGuiKey_DownArrow)) {
+      if (ImGui::IsKeyDown(ImGuiKey_ModCtrl)) {
+        ImGui::SetScrollY(ImGui::GetScrollMaxY());
+
+      } else {
+        ImGui::SetScrollY(std::min(ImGui::GetScrollY() + glyphSize.y,
+                                   ImGui::GetScrollMaxY()));
+      }
+
+    } else if (ImGui::IsKeyPressed(ImGuiKey_PageUp)) {
+      ImGui::SetScrollY(std::max(
+          ImGui::GetScrollY() - (visibleRows - 2) * glyphSize.y, 0.0f));
+
+    } else if (ImGui::IsKeyPressed(ImGuiKey_PageDown)) {
+      ImGui::SetScrollY(
+          std::min(ImGui::GetScrollY() + (visibleRows - 2) * glyphSize.y,
+                   ImGui::GetScrollMaxY()));
+    }
+  }
+}
+
+//
+//	TextDiff::SideBySideView::renderMiniMap
+//
+
+void TextDiff::SideBySideView::renderMiniMap(Diff &diff) {
+  // based on https://github.com/ocornut/imgui/issues/3114
+  if (diff.config.showScrollbarMiniMap) {
+    auto window = ImGui::GetCurrentWindow();
+
+    if (window->ScrollbarY) {
+      auto drawList = ImGui::GetWindowDrawList();
+      auto rect = ImGui::GetWindowScrollbarRect(window, ImGuiAxis_Y);
+      auto rowHeight = rect.GetHeight() / static_cast<float>(rows.size());
+      auto offset = (rect.Max.x - rect.Min.x) * 0.3f;
+      auto left = rect.Min.x + offset;
+      auto right = rect.Max.x - offset;
+
+      drawList->PushClipRect(rect.Min, rect.Max, false);
+
+      // render diff locations
+      for (size_t i = 0; i < rows.size(); i++) {
+        auto &row = rows[i];
+
+        if (row.type != DiffType::common) {
+          auto color = (row.type == DiffType::added) ? diff.addedColor
+                                                     : diff.deletedColor;
+          auto ly = std::round(rect.Min.y + i * rowHeight);
+          drawList->AddRectFilled(ImVec2(left, ly),
+                                  ImVec2(right, ly + rowHeight), color);
+        }
+      }
+
+      drawList->PopClipRect();
+    }
+  }
+}
+
+//
+//	TextDiff::SideBySideView::updateLayout
+//
+
+void TextDiff::SideBySideView::updateLayout(Diff &diff) {
+  rows.clear();
+  maxColumns = 0;
+
+  for (auto &lineState : diff.state) {
+    switch (lineState.type) {
+    case DiffType::common: {
+      auto &line = diff.leftDocument[lineState.leftLine];
+
+      for (size_t i = 0; i < line.rows; i++) {
+        rows.emplace_back(lineState.type, lineState.leftLine, i,
+                          lineState.rightLine, i, line.columns);
+      }
+
+      maxColumns = std::max(maxColumns, line.columns);
+      break;
+    }
+
+    case DiffType::added: {
+      auto &line = diff.rightDocument[lineState.rightLine];
+
+      for (size_t i = 0; i < line.rows; i++) {
+        rows.emplace_back(lineState.type, 0, 0, lineState.rightLine, i,
+                          line.columns);
+      }
+
+      maxColumns = std::max(maxColumns, line.columns);
+      break;
+    }
+
+    case DiffType::deleted: {
+      auto &line = diff.leftDocument[lineState.leftLine];
+
+      for (size_t i = 0; i < line.rows; i++) {
+        rows.emplace_back(lineState.type, lineState.leftLine, i, 0, 0,
+                          line.columns);
+      }
+
+      maxColumns = std::max(maxColumns, line.columns);
+      break;
+    }
+    }
   }
 }
 
@@ -126,7 +1002,9 @@ void TextDiff::Render(const char *title, const ImVec2 &size, bool border) {
 
 void TextDiff::splitLines(std::vector<std::string_view> &result,
                           const std::string_view &text) {
-  size_t prev = CodePoint::skipBOM(text.begin(), text.end()) - text.begin();
+  size_t prev =
+      TextEditorInternal::CodePoint::skipBOM(text.begin(), text.end()) -
+      text.begin();
   size_t pos;
 
   while ((pos = text.find('\n', prev)) != std::string_view::npos) {
@@ -138,466 +1016,17 @@ void TextDiff::splitLines(std::vector<std::string_view> &result,
 }
 
 //
-//	TextDiff::createCombinedView
+//	TextDiff::updatePalette
 //
 
-void TextDiff::createCombinedView() {
-  document.clear();
-  cursors.clearAll();
-  clearMarkers();
+void TextDiff::updatePalette() {
+  // Update palette with the current alpha from style
+  diff.paletteAlpha = ImGui::GetStyle().Alpha;
 
-  for (size_t i = 0; i < lineInfo.size(); i++) {
-    auto &line = lineInfo[i];
-
-    switch (line.status) {
-    case LineStatus::common:
-      document.emplace_back(leftDocument[line.leftLine]);
-      break;
-
-    case LineStatus::added:
-      document.emplace_back(rightDocument[line.rightLine]);
-      addMarker(static_cast<int>(i), 0, addedColor, "", "");
-      break;
-
-    case LineStatus::deleted:
-      document.emplace_back(leftDocument[line.leftLine]);
-      addMarker(static_cast<int>(i), 0, deletedColor, "", "");
-      break;
-    }
-  }
-
-  document.updateMaximumColumn(0, document.lineCount() - 1);
-}
-
-//
-//	TextDiff::decorateLine
-//
-
-void TextDiff::decorateLine(TextEditor::Decorator &decorator) {
-  auto &line = lineInfo[decorator.line];
-  auto lineLeft = static_cast<int>(line.leftLine + 1);
-  auto lineRight = static_cast<int>(line.rightLine + 1);
-  auto color =
-      CherryGUI::ColorConvertU32ToFloat4(palette.get(Color::lineNumber));
-
-  switch (line.status) {
-  case LineStatus::common:
-    CherryGUI::TextColored(color, " %*d %*d  ", leftLineNumberDigits, lineLeft,
-                           rightLineNumberDigits, lineRight);
-    break;
-
-  case LineStatus::added:
-    CherryGUI::TextColored(color, " %*s %*d +", leftLineNumberDigits, "",
-                           rightLineNumberDigits, lineRight);
-    break;
-
-  case LineStatus::deleted:
-    CherryGUI::TextColored(color, " %*d %*s -", leftLineNumberDigits, lineLeft,
-                           rightLineNumberDigits, "");
-    break;
+  for (size_t i = 0; i < static_cast<size_t>(TextEditorInternal::Color::count);
+       i++) {
+    auto color = ImGui::ColorConvertU32ToFloat4(diff.paletteBase[i]);
+    color.w *= diff.paletteAlpha;
+    diff.palette[i] = ImGui::ColorConvertFloat4ToU32(color);
   }
 }
-
-//
-//	TextDiff::renderSideBySide
-//
-
-void TextDiff::renderSideBySide(const char *title, const ImVec2 &size,
-                                bool border) {
-  // update color palette (if required)
-  auto &style = CherryGUI::GetStyle();
-
-  if (paletteAlpha != style.Alpha) {
-    updatePalette();
-  }
-
-  // get font information
-  font = CherryGUI::GetFont();
-  fontSize = CherryGUI::GetFontSize();
-  glyphSize = ImVec2(CherryGUI::CalcTextSize("#").x,
-                     CherryGUI::GetTextLineHeightWithSpacing() * lineSpacing);
-
-  // scroll to specified line (if required)
-  if (scrollToLineNumber >= 0) {
-    scrollToLineNumber =
-        (std::min)(scrollToLineNumber, static_cast<int>(lineInfo.size()));
-
-    switch (scrollToAlignment) {
-    case Scroll::alignTop:
-      CherryGUI::SetNextWindowScroll(
-          ImVec2(0.0f, (std::max)(0.0f, static_cast<float>(scrollToLineNumber) *
-                                            glyphSize.y)));
-      break;
-
-    case Scroll::alignMiddle:
-      CherryGUI::SetNextWindowScroll(
-          ImVec2(0.0f, (std::max)(0.0f, static_cast<float>(scrollToLineNumber -
-                                                           visibleLines / 2) *
-                                            glyphSize.y)));
-      break;
-
-    case Scroll::alignBottom:
-      CherryGUI::SetNextWindowScroll(
-          ImVec2(0.0f, (std::max)(0.0f, static_cast<float>(scrollToLineNumber -
-                                                           (visibleLines - 1)) *
-                                            glyphSize.y)));
-      break;
-    }
-
-    scrollToLineNumber = -1;
-  }
-
-  // ensure diff has focus (if required)
-  if (focusOnEditor) {
-    CherryGUI::SetNextWindowFocus();
-    focusOnEditor = false;
-  }
-
-  // start rendering the widget
-  CherryGUI::SetNextWindowContentSize(
-      ImVec2(0.0f, glyphSize.y * lineInfo.size()));
-  CherryGUI::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.0f, 0.0f));
-  CherryGUI::PushStyleColor(
-      ImGuiCol_ChildBg,
-      CherryGUI::ColorConvertU32ToFloat4(palette.get(Color::background)));
-  CherryGUI::BeginChild(title, size, border,
-                        ImGuiWindowFlags_NoMove |
-                            ImGuiWindowFlags_HorizontalScrollbar |
-                            ImGuiWindowFlags_NoNavInputs);
-
-  auto cursorScreenPos = CherryGUI::GetCursorScreenPos();
-  auto visibleSize = CherryGUI::GetCurrentWindow()->Rect().GetSize();
-
-  // determine view parameters
-  leftLineNumberWidth = glyphSize.x * (leftLineNumberDigits + 4);
-  rightLineNumberWidth = glyphSize.x * (rightLineNumberDigits + 4);
-  textColumnWidth = static_cast<float>(visibleSize.x - leftLineNumberWidth -
-                                       rightLineNumberWidth) /
-                    2.0f;
-
-  leftLineNumberPos = cursorScreenPos.x;
-  leftTextPos = leftLineNumberPos + leftLineNumberWidth;
-  rightLineNumberPos = leftTextPos + textColumnWidth;
-  rightTextPos = rightLineNumberPos + rightLineNumberWidth;
-  rightTextEnd = rightTextPos + textColumnWidth;
-
-  visibleLines =
-      (std::max)(static_cast<int>(std::ceil(visibleSize.y / glyphSize.y)), 0);
-  visibleColumns =
-      (std::max)(static_cast<int>(std::ceil(textColumnWidth / glyphSize.x)), 0);
-
-  firstVisibleColumn =
-      (std::max)(static_cast<int>(std::floor(textScroll / glyphSize.x)), 0);
-  lastVisibleColumn = static_cast<int>(
-      std::floor((textScroll + textColumnWidth) / glyphSize.x));
-  firstVisibleLine = (std::max)(static_cast<int>(std::floor(
-                                    CherryGUI::GetScrollY() / glyphSize.y)),
-                                0);
-  lastVisibleLine =
-      (std::min)(static_cast<int>(std::floor(
-                     (CherryGUI::GetScrollY() + visibleSize.y) / glyphSize.y)),
-                 static_cast<int>(lineInfo.size() - 1));
-
-  renderSideBySideBackground();
-  renderSideBySideText();
-  renderSideBySideTextScrollbars();
-  renderSideBySideMiniMap();
-
-  CherryGUI::EndChild();
-  CherryGUI::PopStyleColor();
-  CherryGUI::PopStyleVar();
-}
-
-//
-//	TextDiff::renderSideBySideBackground
-//
-
-void TextDiff::renderSideBySideBackground() {
-  // render line numbers and text backgrounds
-  auto drawList = CherryGUI::GetWindowDrawList();
-  auto y = CherryGUI::GetCursorScreenPos().y + firstVisibleLine * glyphSize.y;
-  char buffer[32];
-
-  for (auto i = firstVisibleLine; i <= lastVisibleLine; i++) {
-    auto &line = lineInfo[i];
-    auto lineLeft = static_cast<int>(line.leftLine + 1);
-    auto lineRight = static_cast<int>(line.rightLine + 1);
-
-    switch (line.status) {
-    case LineStatus::common:
-      snprintf(buffer, sizeof(buffer), " %*d", leftLineNumberDigits, lineLeft);
-      CherryGUI::AddText(drawList, ImVec2(leftLineNumberPos, y),
-                         palette.get(Color::lineNumber), buffer);
-      snprintf(buffer, sizeof(buffer), " %*d", rightLineNumberDigits,
-               lineRight);
-      CherryGUI::AddText(drawList, ImVec2(rightLineNumberPos, y),
-                         palette.get(Color::lineNumber), buffer);
-      break;
-
-    case LineStatus::added:
-      snprintf(buffer, sizeof(buffer), " %*d +", rightLineNumberDigits,
-               lineRight);
-      CherryGUI::AddText(drawList, ImVec2(rightLineNumberPos, y),
-                         palette.get(Color::lineNumber), buffer);
-
-      CherryGUI::AddRectFilled(drawList, ImVec2(rightTextPos, y),
-                               ImVec2(rightTextEnd, y + glyphSize.y),
-                               addedColor);
-
-      break;
-
-    case LineStatus::deleted:
-      snprintf(buffer, sizeof(buffer), " %*d -", leftLineNumberDigits,
-               lineLeft);
-      CherryGUI::AddText(drawList, ImVec2(leftLineNumberPos, y),
-                         palette.get(Color::lineNumber), buffer);
-
-      CherryGUI::AddRectFilled(drawList, ImVec2(leftTextPos, y),
-                               ImVec2(rightLineNumberPos, y + glyphSize.y),
-                               deletedColor);
-
-      break;
-    }
-
-    y += glyphSize.y;
-  }
-}
-
-//
-//	TextDiff::renderSideBySideText
-//
-
-void TextDiff::renderSideBySideText() {
-  // setup rendering
-  auto drawList = CherryGUI::GetWindowDrawList();
-  auto cursorScreenPos = CherryGUI::GetCursorScreenPos();
-  auto yTop = CherryGUI::GetClipRectMin(drawList).y;
-  auto yBottom = CherryGUI::GetClipRectMax(drawList).y;
-
-  // render left text
-  CherryGUI::PushClipRect(drawList, ImVec2(leftTextPos, yTop),
-                          ImVec2(rightLineNumberPos, yBottom), false);
-
-  for (auto i = firstVisibleLine; i <= lastVisibleLine; i++) {
-    auto &line = lineInfo[i];
-    auto y = cursorScreenPos.y + i * glyphSize.y;
-
-    switch (line.status) {
-    case LineStatus::common:
-    case LineStatus::deleted:
-      renderSideBySideLine(leftTextPos, y, leftDocument[lineInfo[i].leftLine]);
-      break;
-
-    case LineStatus::added:
-      break;
-    }
-  }
-
-  CherryGUI::PopClipRect(drawList);
-
-  // render right text
-  CherryGUI::PushClipRect(drawList, ImVec2(rightTextPos, yTop),
-                          ImVec2(rightTextEnd, yBottom), false);
-
-  for (auto i = firstVisibleLine; i <= lastVisibleLine; i++) {
-    auto &line = lineInfo[i];
-    auto y = cursorScreenPos.y + i * glyphSize.y;
-
-    switch (line.status) {
-    case LineStatus::common:
-    case LineStatus::added:
-      renderSideBySideLine(rightTextPos, y,
-                           rightDocument[lineInfo[i].rightLine]);
-      break;
-
-    case LineStatus::deleted:
-      break;
-    }
-  }
-
-  CherryGUI::PopClipRect(drawList);
-}
-
-//
-//	TextDiff::renderSideBySideLine
-//
-
-void TextDiff::renderSideBySideLine(float x, float y, TextEditor::Line &line) {
-  // draw colored glyphs for specified line
-  auto drawList = CherryGUI::GetWindowDrawList();
-  auto tabSize = document.getTabSize();
-  auto firstRenderableColumn = (firstVisibleColumn / tabSize) * tabSize;
-
-  auto column = firstRenderableColumn;
-  auto index = document.getIndex(line, column);
-  auto lineSize = line.size();
-
-  while (index < lineSize && column <= lastVisibleColumn) {
-    auto &glyph = line[index];
-    auto codepoint = glyph.codepoint;
-    ImVec2 glyphPos(x + column * glyphSize.x - textScroll, y);
-
-    if (codepoint == '\t') {
-      if (showTabs) {
-        const auto x1 = glyphPos.x + glyphSize.x * 0.3f;
-        const auto y1 = glyphPos.y + fontSize * 0.5f;
-        const auto x2 = glyphPos.x + glyphSize.x;
-
-        ImVec2 p1, p2, p3, p4;
-        p1 = ImVec2(x1, y1);
-        p2 = ImVec2(x2, y1);
-        p3 = ImVec2(x2 - fontSize * 0.16f, y1 - fontSize * 0.16f);
-        p4 = ImVec2(x2 - fontSize * 0.16f, y1 + fontSize * 0.16f);
-
-        CherryGUI::AddLine(drawList, p1, p2, palette.get(Color::whitespace));
-        CherryGUI::AddLine(drawList, p2, p3, palette.get(Color::whitespace));
-        CherryGUI::AddLine(drawList, p2, p4, palette.get(Color::whitespace));
-      }
-
-    } else if (codepoint == ' ') {
-      if (showSpaces) {
-        const auto x1 = glyphPos.x + glyphSize.x * 0.5f;
-        const auto y1 = glyphPos.y + fontSize * 0.5f;
-        CherryGUI::AddCircleFilled(drawList, ImVec2(x1, y1), 1.5f,
-                                   palette.get(Color::whitespace), 4);
-      }
-
-    } else {
-      CherryGUI::RenderChar(font, drawList, fontSize, glyphPos,
-                            palette.get(glyph.color), codepoint);
-    }
-
-    index++;
-    column += (codepoint == '\t') ? tabSize - (column % tabSize) : 1;
-  }
-}
-
-//
-//	TextDiff::renderSideBySideTextScrollbars
-//
-
-void TextDiff::renderSideBySideTextScrollbars() {
-  auto maxColumnsWidth =
-      (std::max)(leftDocument.getMaxColumn(), rightDocument.getMaxColumn()) *
-      glyphSize.x;
-  auto visibleColumnsWidth = rightLineNumberPos - leftTextPos;
-
-  if (maxColumnsWidth > visibleColumnsWidth) {
-    auto window = CherryGUI::GetCurrentWindow();
-    const ImRect outerRect = window->Rect();
-    auto borderSize = std::round(window->WindowBorderSize * 0.5f);
-    auto scrollbarSize = CherryGUI::GetStyle().ScrollbarSize;
-
-    auto textScrollbarTop =
-        (std::max)(outerRect.Min.y + borderSize,
-                   outerRect.Max.y - borderSize - scrollbarSize);
-    ImRect leftScrollbarFrame(leftTextPos, textScrollbarTop, rightLineNumberPos,
-                              textScrollbarTop + scrollbarSize);
-    ImRect rightScrollbarFrame(rightTextPos, textScrollbarTop, rightTextEnd,
-                               textScrollbarTop + scrollbarSize);
-    ImS64 scroll = static_cast<ImS64>(textScroll);
-
-    if (CherryGUI::ScrollbarEx(
-            leftScrollbarFrame, CherryGUI::GetID("leftTextScroll"), ImGuiAxis_X,
-            &scroll, static_cast<ImS64>(visibleColumnsWidth),
-            static_cast<ImS64>(maxColumnsWidth), ImDrawFlags_RoundCornersAll)) {
-      textScroll = static_cast<float>(scroll);
-    }
-
-    if (CherryGUI::ScrollbarEx(
-            rightScrollbarFrame, CherryGUI::GetID("rightTextScroll"),
-            ImGuiAxis_X, &scroll, static_cast<ImS64>(visibleColumnsWidth),
-            static_cast<ImS64>(maxColumnsWidth), ImDrawFlags_RoundCornersAll)) {
-      textScroll = static_cast<float>(scroll);
-    }
-
-    if (CherryGUI::IsWindowHovered()) {
-      textScroll = std::clamp(textScroll - CherryGUI::GetMouseWheelH() *
-                                               CherryGUI::GetFontSize(),
-                              0.0f, maxColumnsWidth - visibleColumnsWidth);
-
-      if (CherryGUI::IsKeyPressed(ImGuiKey_LeftArrow)) {
-        textScroll = (std::max)(textScroll - glyphSize.x, 0.0f);
-
-      } else if (CherryGUI::IsKeyPressed(ImGuiKey_RightArrow)) {
-        textScroll = (std::min)(textScroll + glyphSize.x,
-                                maxColumnsWidth - visibleColumnsWidth);
-
-      } else if (CherryGUI::IsKeyPressed(ImGuiKey_Home)) {
-        textScroll = 0.0f;
-
-      } else if (CherryGUI::IsKeyPressed(ImGuiKey_End)) {
-        textScroll = maxColumnsWidth - visibleColumnsWidth;
-      }
-    }
-  }
-
-  if (CherryGUI::IsWindowHovered()) {
-    if (CherryGUI::IsKeyPressed(ImGuiKey_UpArrow)) {
-      if (CherryGUI::IsKeyDown(ImGuiKey_ModCtrl)) {
-        CherryGUI::SetScrollY(0.0f);
-
-      } else {
-        CherryGUI::SetScrollY(
-            (std::max)(CherryGUI::GetScrollY() - glyphSize.y, 0.0f));
-      }
-
-    } else if (CherryGUI::IsKeyPressed(ImGuiKey_DownArrow)) {
-      if (CherryGUI::IsKeyDown(ImGuiKey_ModCtrl)) {
-        CherryGUI::SetScrollY(CherryGUI::GetScrollMaxY());
-
-      } else {
-        CherryGUI::SetScrollY((std::min)(CherryGUI::GetScrollY() + glyphSize.y,
-                                         CherryGUI::GetScrollMaxY()));
-      }
-
-    } else if (CherryGUI::IsKeyPressed(ImGuiKey_PageUp)) {
-      CherryGUI::SetScrollY(
-          (std::max)(CherryGUI::GetScrollY() - (visibleLines - 2) * glyphSize.y,
-                     0.0f));
-
-    } else if (CherryGUI::IsKeyPressed(ImGuiKey_PageDown)) {
-      CherryGUI::SetScrollY(
-          (std::min)(CherryGUI::GetScrollY() + (visibleLines - 2) * glyphSize.y,
-                     CherryGUI::GetScrollMaxY()));
-    }
-  }
-}
-
-//
-//	TextDiff::renderSideBySideMiniMap
-//
-
-void TextDiff::renderSideBySideMiniMap() {
-  // based on https://github.com/ocornut/imgui/issues/3114
-  if (showScrollbarMiniMap) {
-    auto window = CherryGUI::GetCurrentWindow();
-
-    if (window->ScrollbarY) {
-      auto drawList = CherryGUI::GetWindowDrawList();
-      auto rect = CherryGUI::GetWindowScrollbarRect(window, ImGuiAxis_Y);
-      auto lineHeight = rect.GetHeight() / static_cast<float>(document.size());
-      auto offset = (rect.Max.x - rect.Min.x) * 0.3f;
-      auto left = rect.Min.x + offset;
-      auto right = rect.Max.x - offset;
-
-      CherryGUI::PushClipRect(drawList, rect.Min, rect.Max, false);
-
-      // render diff locations
-      for (size_t i = 0; i < lineInfo.size(); i++) {
-        auto &line = lineInfo[i];
-
-        if (line.status != LineStatus::common) {
-          auto color =
-              (line.status == LineStatus::added) ? addedColor : deletedColor;
-          auto ly = std::round(rect.Min.y + i * lineHeight);
-          CherryGUI::AddRectFilled(drawList, ImVec2(left, ly),
-                                   ImVec2(right, ly + lineHeight), color);
-        }
-      }
-
-      CherryGUI::PopClipRect(drawList);
-    }
-  }
-}
-} // namespace ModuleUI
