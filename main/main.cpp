@@ -17,17 +17,26 @@ public:
     this->add_content_browser_item_handler(ItemHandlerInterface(
         "file_cpp", TextEdit::StartTextEditorInstance, "Edit",
         "Edit this C++ file", TextEdit::GetPath("resources/icons/edit.png")));
+    this->add_content_browser_item_handler(ItemHandlerInterface(
+        "file_lua", TextEdit::StartTextEditorInstance, "Edit",
+        "Edit this Lua file", TextEdit::GetPath("resources/icons/edit.png")));
+    this->add_content_browser_item_handler(ItemHandlerInterface(
+        "file_json", TextEdit::StartTextEditorInstance, "Edit",
+        "Edit this JSON file", TextEdit::GetPath("resources/icons/edit.png")));
     this->add_content_browser_item_handler(
         ItemHandlerInterface("file_hpp", TextEdit::StartTextEditorInstance,
                              "Edit", "Edit this C++ header file",
                              TextEdit::GetPath("resources/icons/edit.png")));
-    this->add_content_browser_item_handler(
-        ItemHandlerInterface("file_c", TextEdit::StartTextEditorInstance,
-                             "Edit", "Edit this C header file",
-                             TextEdit::GetPath("resources/icons/edit.png")));
+    this->add_content_browser_item_handler(ItemHandlerInterface(
+        "file_c", TextEdit::StartTextEditorInstance, "Edit", "Edit this C file",
+        TextEdit::GetPath("resources/icons/edit.png")));
     this->add_content_browser_item_handler(
         ItemHandlerInterface("file_h", TextEdit::StartTextEditorInstance,
                              "Edit", "Edit this C header file",
+                             TextEdit::GetPath("resources/icons/edit.png")));
+    this->add_content_browser_item_handler(
+        ItemHandlerInterface("file_python", TextEdit::StartTextEditorInstance,
+                             "Edit", "Edit this Python file",
                              TextEdit::GetPath("resources/icons/edit.png")));
 
     this->add_content_browser_item_identifier(ItemIdentifierInterface(

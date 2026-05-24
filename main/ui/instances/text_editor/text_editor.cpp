@@ -334,6 +334,12 @@ FileTypes TextEditorAppWindow::detect_file(const std::string &path) {
       {"yaml", FileTypes::File_YAML},
       {"yml", FileTypes::File_YAML},
       {"cpp", FileTypes::File_CPP},
+      {"hpp", FileTypes::File_CPP},
+      {"lua", FileTypes::File_LUA},
+      {"python", FileTypes::File_PYTHON},
+      {"c", FileTypes::File_C},
+      {"h", FileTypes::File_C},
+      {"cs", FileTypes::File_CS},
 
       // Config
       {"cfg", FileTypes::File_CFG},
