@@ -61,8 +61,7 @@ TextEditorAppWindow::TextEditorAppWindow(const std::string &path,
   m_Type = detect_file(path);
   m_AppWindow = std::make_shared<Cherry::AppWindow>(name, name);
 
-  // TODO : Or load custom icons for each file types
-  m_AppWindow->SetIcon(TextEdit::GetPath("resources/icons/edit.png"));
+  DefineWindowIcon();
   m_AppWindow->SetLeftMenubarCallback([this]() { RenderMenubar(); });
   m_AppWindow->SetRightMenubarCallback([this]() { RenderRightMenubar(); });
   m_AppWindow->SetLeftBottombarCallback([this]() { RenderBottombar(); });
@@ -82,6 +81,27 @@ TextEditorAppWindow::TextEditorAppWindow(const std::string &path,
 }
 
 void TextEditorAppWindow::SetLanguage(const std::string &name) {}
+
+// TODO: Let the user customize icons with custom vortex events
+// TODO: Let the user desactivate this feature and always show icons/edit.png
+void TextEditorAppWindow::DefineWindowIcon() {
+  switch (m_Type) {
+  case FileTypes::File_CPP: {
+    m_AppWindow->SetIcon(
+        TextEdit::GetPath("resources/icons/window_icons/cpp.png"));
+    break;
+  }
+  case FileTypes::File_C: {
+    m_AppWindow->SetIcon(
+        TextEdit::GetPath("resources/icons/window_icons/c.png"));
+    break;
+  }
+  default: {
+    m_AppWindow->SetIcon(TextEdit::GetPath("resources/icons/edit.png"));
+    break;
+  }
+  }
+}
 
 std::string TextEditorAppWindow::GetFileTypeStr(FileTypes type) {
   switch (type) {

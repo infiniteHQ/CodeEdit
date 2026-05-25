@@ -73,6 +73,8 @@ public:
   void Undo();
   void Redo();
 
+  void DefineWindowIcon();
+
   void SetLanguage(const std::string &name);
   void AutoSetLanguage();
 
