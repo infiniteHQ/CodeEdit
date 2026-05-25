@@ -96,6 +96,21 @@ void TextEditorAppWindow::DefineWindowIcon() {
         TextEdit::GetPath("resources/icons/window_icons/c.png"));
     break;
   }
+  case FileTypes::File_HPP: {
+    m_AppWindow->SetIcon(
+        TextEdit::GetPath("resources/icons/window_icons/hpp.png"));
+    break;
+  }
+  case FileTypes::File_H: {
+    m_AppWindow->SetIcon(
+        TextEdit::GetPath("resources/icons/window_icons/h.png"));
+    break;
+  }
+  case FileTypes::File_LUA: {
+    m_AppWindow->SetIcon(
+        TextEdit::GetPath("resources/icons/window_icons/lua.png"));
+    break;
+  }
   default: {
     m_AppWindow->SetIcon(TextEdit::GetPath("resources/icons/edit.png"));
     break;
@@ -354,11 +369,11 @@ FileTypes TextEditorAppWindow::detect_file(const std::string &path) {
       {"yaml", FileTypes::File_YAML},
       {"yml", FileTypes::File_YAML},
       {"cpp", FileTypes::File_CPP},
-      {"hpp", FileTypes::File_CPP},
+      {"hpp", FileTypes::File_HPP},
       {"lua", FileTypes::File_LUA},
       {"python", FileTypes::File_PYTHON},
       {"c", FileTypes::File_C},
-      {"h", FileTypes::File_C},
+      {"h", FileTypes::File_H},
       {"cs", FileTypes::File_CS},
 
       // Config
@@ -471,9 +486,9 @@ void TextEditorAppWindow::Render() {
   }
 
   // TODO: If not langauge set by the user
-  if (m_Type == FileTypes::File_CPP) {
+  if (m_Type == FileTypes::File_CPP || m_Type == FileTypes::File_HPP) {
     editor.SetProperty("language_name", "C++");
-  } else if (m_Type == FileTypes::File_C) {
+  } else if (m_Type == FileTypes::File_C || m_Type == FileTypes::File_H) {
     editor.SetProperty("language_name", "C");
   } else if (m_Type == FileTypes::File_LUA) {
     editor.SetProperty("language_name", "Lua");

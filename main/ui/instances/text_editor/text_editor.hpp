@@ -37,6 +37,8 @@ enum class FileTypes {
   File_CS,
   File_CPP,
   File_C,
+  File_HPP,
+  File_H,
 
   // Other
   File_UNKNOWN,
