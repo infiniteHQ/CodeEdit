@@ -1,58 +1,54 @@
 #include "./src/module.hpp"
 
-#ifndef CTextEdit
-TextEdit::Context *CTextEdit = NULL;
-#endif
-
-class Module : public ModuleInterface {
+class infintiehq_codeedit : public ModuleInterface {
 public:
+  std::shared_ptr<CodeEdit::Context> ctx;
+
   void execute() override {
-    // Create the context pointer of this module
-    TextEdit::CreateContext();
+    ctx = CodeEdit::create_context();
 
-    // Get the interface pointer
-    CTextEdit->m_interface =
-        ModuleInterface::get_editor_module_by_name(this->name());
+    auto m = ModuleInterface::get_editor_module_by_name(this->name());
+    CodeEdit::get_current_context()->m_interface = m;
 
     this->add_content_browser_item_handler(ItemHandlerInterface(
-        "file_cpp", TextEdit::StartTextEditorInstance, "Edit",
-        "Edit this C++ file", TextEdit::GetPath("resources/icons/edit.png")));
+        "file_cpp", CodeEdit::StartTextEditorInstance, "Edit",
+        "Edit this C++ file", CodeEdit::get_path("resources/icons/edit.png")));
     this->add_content_browser_item_handler(ItemHandlerInterface(
-        "file_lua", TextEdit::StartTextEditorInstance, "Edit",
-        "Edit this Lua file", TextEdit::GetPath("resources/icons/edit.png")));
+        "file_lua", CodeEdit::StartTextEditorInstance, "Edit",
+        "Edit this Lua file", CodeEdit::get_path("resources/icons/edit.png")));
     this->add_content_browser_item_handler(ItemHandlerInterface(
-        "file_json", TextEdit::StartTextEditorInstance, "Edit",
-        "Edit this JSON file", TextEdit::GetPath("resources/icons/edit.png")));
+        "file_json", CodeEdit::StartTextEditorInstance, "Edit",
+        "Edit this JSON file", CodeEdit::get_path("resources/icons/edit.png")));
     this->add_content_browser_item_handler(
-        ItemHandlerInterface("file_hpp", TextEdit::StartTextEditorInstance,
+        ItemHandlerInterface("file_hpp", CodeEdit::StartTextEditorInstance,
                              "Edit", "Edit this C++ header file",
-                             TextEdit::GetPath("resources/icons/edit.png")));
+                             CodeEdit::get_path("resources/icons/edit.png")));
     this->add_content_browser_item_handler(ItemHandlerInterface(
-        "file_c", TextEdit::StartTextEditorInstance, "Edit", "Edit this C file",
-        TextEdit::GetPath("resources/icons/edit.png")));
+        "file_c", CodeEdit::StartTextEditorInstance, "Edit", "Edit this C file",
+        CodeEdit::get_path("resources/icons/edit.png")));
     this->add_content_browser_item_handler(
-        ItemHandlerInterface("file_h", TextEdit::StartTextEditorInstance,
+        ItemHandlerInterface("file_h", CodeEdit::StartTextEditorInstance,
                              "Edit", "Edit this C header file",
-                             TextEdit::GetPath("resources/icons/edit.png")));
+                             CodeEdit::get_path("resources/icons/edit.png")));
     this->add_content_browser_item_handler(
-        ItemHandlerInterface("file_python", TextEdit::StartTextEditorInstance,
+        ItemHandlerInterface("file_python", CodeEdit::StartTextEditorInstance,
                              "Edit", "Edit this Python file",
-                             TextEdit::GetPath("resources/icons/edit.png")));
+                             CodeEdit::get_path("resources/icons/edit.png")));
 
     this->add_content_browser_item_identifier(ItemIdentifierInterface(
-        TextEdit::IsValidFile, "text_edit:superfile", "Super file", "#553333"));
+        CodeEdit::IsValidFile, "text_edit:superfile", "Super file", "#553333"));
 
-    this->set_credits_file(TextEdit::GetPath("CREDITS"));
+    this->set_credits_file(CodeEdit::get_path("CREDITS"));
     this->add_documentation("Take the editor", "Edit a txt file",
-                            TextEdit::GetPath("docs/main.md"));
+                            CodeEdit::get_path("docs/main.md"));
     this->add_documentation("Take the editor", "Find specific text",
-                            TextEdit::GetPath("docs/main.md"));
+                            CodeEdit::get_path("docs/main.md"));
   }
 
   void init_ui() override {
     // CherryApp.AddFont(
     //     "JetBrainsMono",
-    //     TextEdit::GetPath("resources/fonts/JetBrainsMono-Regular.ttf"), 40.0f);
+    //     CodeEdit::get_path("resources/fonts/JetBrainsMono-Regular.ttf"), 40.0f);
   }
 
   void destroy() override {
@@ -60,19 +56,19 @@ public:
     this->reset_module();
 
     // Clear windows
-    for (auto i : CTextEdit->m_text_editor_instances) {
+    for (auto i : CodeEdit::get_current_context()->m_text_editor_instances) {
       CherryApp.DeleteAppWindow(i->GetAppWindow());
     }
 
-    // Clear context
-    // DestroyContext();
+    CodeEdit::destroy_context(ctx);
+    ctx.reset();
   }
 };
 
 #ifdef _WIN32
 extern "C" __declspec(dllexport) ModuleInterface *create_em() {
-  return new Module();
+  return new infintiehq_codeedit();
 }
 #else
-extern "C" ModuleInterface *create_em() { return new Module(); }
+extern "C" ModuleInterface *create_em() { return new infintiehq_codeedit(); }
 #endif

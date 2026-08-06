@@ -1,36 +1,40 @@
-#include "../ui/instances/text_editor/text_editor.hpp"
+
 #include <vxcore/include/vortex.h>
 #include <vxcore/include/vortex_internals.h>
 #include <vxgui/editor/main/editor.hpp>
 
-#ifndef SAMPLE_MODULE_HPP
-#define SAMPLE_MODULE_HPP
+#include "../ui/instances/text_editor/text_editor.hpp"
 
-namespace TextEdit {
+#ifndef CODEEDIT_HPP
+#define CODEEDIT_HPP
+
+namespace CodeEdit {
 struct Context {
   std::shared_ptr<ModuleInterface> m_interface;
   std::vector<std::shared_ptr<ModuleUI::TextEditorAppWindow>>
       m_text_editor_instances;
 };
-} // namespace TextEdit
+} // namespace CodeEdit
 
-#ifndef TEXTEDIT_API
-#define TEXTEDIT_API
+#ifndef CODEEDIT_API
+#define CODEEDIT_API
 #endif
 
-#ifndef CTextEdit
-extern TEXTEDIT_API TextEdit::Context *CTextEdit;
+#ifndef CCodeEdit
+extern CODEEDIT_API std::weak_ptr<CodeEdit::Context> CCodeEdit;
 #endif
 
-namespace TextEdit {
-TEXTEDIT_API void CreateContext();
-TEXTEDIT_API void DestroyContext();
+namespace CodeEdit {
+// Context
+CODEEDIT_API std::shared_ptr<CodeEdit::Context> create_context();
+CODEEDIT_API void destroy_context(std::shared_ptr<CodeEdit::Context> ctx);
+CODEEDIT_API void set_current_context(std::shared_ptr<CodeEdit::Context> ctx);
+CODEEDIT_API std::shared_ptr<CodeEdit::Context> get_current_context();
 
-TEXTEDIT_API std::string GetPath(const std::string &path);
-TEXTEDIT_API void Hello();
+CODEEDIT_API std::string get_path(const std::string &path);
 
-TEXTEDIT_API void StartTextEditorInstance(const std::string &path);
-TEXTEDIT_API bool IsValidFile(const std::string &path);
-} // namespace TextEdit
+CODEEDIT_API void StartTextEditorInstance(const std::string &path);
+CODEEDIT_API bool IsValidFile(const std::string &path);
+} // namespace CodeEdit
 
-#endif // SAMPLE_MODULE_HPP
+#endif // CODEEDIT_HPP

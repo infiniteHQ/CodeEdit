@@ -1,13 +1,35 @@
 #include "module.hpp"
 
-void TextEdit::CreateContext() {
-  TextEdit::Context *ctx = new (TextEdit::Context);
-  CTextEdit = ctx;
+// runtime pointer
+#ifndef CCodeEdit
+std::weak_ptr<CodeEdit::Context> CCodeEdit;
+#endif
+
+std::shared_ptr<CodeEdit::Context> CodeEdit::create_context() {
+  auto ctx = std::make_shared<CodeEdit::Context>();
+
+  set_current_context(ctx);
+
+  return ctx;
 }
 
-void TextEdit::DestroyContext() { free(CTextEdit); }
+void CodeEdit::destroy_context(std::shared_ptr<CodeEdit::Context> ctx) {
+  set_current_context(nullptr);
+}
 
-bool TextEdit::IsValidFile(const std::string &path) {
+void CodeEdit::set_current_context(std::shared_ptr<CodeEdit::Context> ctx) {
+  CCodeEdit = ctx;
+}
+
+std::shared_ptr<CodeEdit::Context> CodeEdit::get_current_context() {
+  return CCodeEdit.lock();
+}
+
+std::string CodeEdit::get_path(const std::string &path) {
+  return get_current_context()->m_interface->cook_path(path);
+}
+
+bool CodeEdit::IsValidFile(const std::string &path) {
   namespace fs = std::filesystem;
 
   if (!fs::is_directory(path)) {
@@ -24,7 +46,7 @@ bool TextEdit::IsValidFile(const std::string &path) {
   return false;
 }
 
-void TextEdit::StartTextEditorInstance(const std::string &path) {
+void CodeEdit::StartTextEditorInstance(const std::string &path) {
   std::string filename = fs::path(path).filename().string();
 
   const size_t maxLen = 24;
@@ -34,15 +56,10 @@ void TextEdit::StartTextEditorInstance(const std::string &path) {
 
   std::string window_name =
       filename + "####" +
-      std::to_string(CTextEdit->m_text_editor_instances.size());
+      std::to_string(
+          CodeEdit::get_current_context()->m_text_editor_instances.size());
 
   auto inst = ModuleUI::TextEditorAppWindow::Create(path, window_name);
   Cherry::AddAppWindow(inst->GetAppWindow());
-  CTextEdit->m_text_editor_instances.push_back(inst);
+  CodeEdit::get_current_context()->m_text_editor_instances.push_back(inst);
 }
-
-std::string TextEdit::GetPath(const std::string &path) {
-  return CTextEdit->m_interface->cook_path(path);
-}
-
-void TextEdit::Hello() { vxe::log_info("Tt", "cc"); }
