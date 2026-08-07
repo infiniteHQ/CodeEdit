@@ -67,7 +67,8 @@ void TextDiff::SetText(const std::string_view &left,
 //	TextDiff::Render
 //
 
-void TextDiff::Render(const char *title, const ImVec2 &size, bool border) {
+void TextDiff::Render(const char *title, const ImVec2 &size,
+                      ImGuiWindowFlags windowFlags, bool border) {
   // update color palette (if required)
   if (diff.paletteAlpha != ImGui::GetStyle().Alpha) {
     updatePalette();
@@ -85,11 +86,11 @@ void TextDiff::Render(const char *title, const ImVec2 &size, bool border) {
 
   if (diff.sideBySideMode) {
     // render a custom side-by-side view
-    sideBySideView.render(title, size, border, diff);
+    sideBySideView.render(title, size, windowFlags, diff, border);
 
   } else {
     // render combined view
-    integratedView.render(title, size, border, diff);
+    integratedView.render(title, size, windowFlags, diff, border);
   }
 
   // reset view mode
@@ -110,7 +111,8 @@ void TextDiff::Render(const char *title, const ImVec2 &size, bool border) {
 //
 
 void TextDiff::IntegratedView::render(const char *title, const ImVec2 &size,
-                                      bool border, Diff &diff) {
+                                      ImGuiWindowFlags windowFlags, Diff &diff,
+                                      bool border) {
   // get font information
   font = ImGui::GetFont();
   fontSize = ImGui::GetFontSize();
@@ -118,19 +120,14 @@ void TextDiff::IntegratedView::render(const char *title, const ImVec2 &size,
       ImVec2(ImGui::CalcTextSize("#").x,
              ImGui::GetTextLineHeightWithSpacing() * diff.config.lineSpacing);
 
-  // determine flags
-
-  ImGuiWindowFlags windowFlags = ImGuiWindowFlags_HorizontalScrollbar |
-                                 ImGuiWindowFlags_NoNavInputs |
-                                 ImGuiWindowFlags_NoMove;
-
   // start rendering the widget
   ImGui::SetNextWindowContentSize(ImVec2(0.0f, glyphSize.y * rows.size()));
   ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.0f, 0.0f));
   ImGui::PushStyleColor(ImGuiCol_ChildBg,
                         ImGui::ColorConvertU32ToFloat4(diff.palette.get(
                             TextEditorInternal::Color::background)));
-  ImGui::BeginChild(title, size, false, windowFlags);
+  ImGui::BeginChild(title, size, border,
+                    windowFlags | ImGuiWindowFlags_HorizontalScrollbar);
 
   // determine visible dimensions
   cursorScreenPos = ImGui::GetCursorScreenPos();
@@ -146,7 +143,7 @@ void TextDiff::IntegratedView::render(const char *title, const ImVec2 &size,
   textColumnWidth = visibleSize.x - lineNumberWidth;
   textColumnWidth = std::floor(textColumnWidth / glyphSize.x) * glyphSize.x;
   diff.config.wordWrapColumns =
-      static_cast<size_t>((std::max)(textColumnWidth / glyphSize.x, 0.0f));
+      static_cast<size_t>(std::max(textColumnWidth / glyphSize.x, 0.0f));
 
   // update typesetters and update layout (if required)
   bool layoutChanged = false;
@@ -156,7 +153,7 @@ void TextDiff::IntegratedView::render(const char *title, const ImVec2 &size,
       rightTypeSetter.update(diff.config, diff.rightDocument, rightLineFold);
   bool viewChanged = diff.sideBySideMode != diff.previousSideBySideMode;
 
-  if (layoutChanged | viewChanged) {
+  if (layoutChanged || viewChanged) {
     updateLayout(diff);
   }
 
@@ -166,18 +163,18 @@ void TextDiff::IntegratedView::render(const char *title, const ImVec2 &size,
   textEnd = textPos + textColumnWidth;
 
   visibleRows =
-      (std::max)(static_cast<int>(std::ceil(visibleSize.y / glyphSize.y)), 0);
+      std::max(static_cast<int>(std::ceil(visibleSize.y / glyphSize.y)), 0);
   visibleColumns =
-      (std::max)(static_cast<int>(std::ceil(textColumnWidth / glyphSize.x)), 0);
+      std::max(static_cast<int>(std::ceil(textColumnWidth / glyphSize.x)), 0);
 
-  firstVisibleRow = (std::max)(
+  firstVisibleRow = std::max(
       static_cast<int>(std::floor(ImGui::GetScrollY() / glyphSize.y)), 0);
   lastVisibleRow =
-      (std::min)(static_cast<int>(std::ceil(
+      std::min(static_cast<int>(std::ceil(
                    (ImGui::GetScrollY() + visibleSize.y) / glyphSize.y)),
                static_cast<int>(rows.size() - 1));
   firstVisibleColumn =
-      (std::max)(static_cast<int>(std::floor(textScroll / glyphSize.x)), 0);
+      std::max(static_cast<int>(std::floor(textScroll / glyphSize.x)), 0);
   lastVisibleColumn =
       static_cast<int>(std::ceil((textScroll + textColumnWidth) / glyphSize.x));
   firstRenderableColumn =
@@ -197,14 +194,14 @@ void TextDiff::IntegratedView::render(const char *title, const ImVec2 &size,
 //	TextDiff::IntegratedView::renderBackground
 //
 
-void TextDiff::IntegratedView::renderBackground(Diff &diff) {
+void TextDiff::IntegratedView::renderBackground(const Diff &diff) {
   // render line numbers and text backgrounds
   auto drawList = ImGui::GetWindowDrawList();
   auto y = cursorScreenPos.y + firstVisibleRow * glyphSize.y;
   char buffer[32];
 
   for (auto i = firstVisibleRow; i <= lastVisibleRow; i++) {
-    auto &row = rows[i];
+    const auto &row = rows[i];
 
     auto lineLeft = static_cast<int>(row.leftLine + 1);
     auto lineRight = static_cast<int>(row.rightLine + 1);
@@ -259,7 +256,7 @@ void TextDiff::IntegratedView::renderBackground(Diff &diff) {
 //	TextDiff::IntegratedView::renderText
 //
 
-void TextDiff::IntegratedView::renderText(Diff &diff) {
+void TextDiff::IntegratedView::renderText(const Diff &diff) {
   // setup rendering
   auto drawList = ImGui::GetWindowDrawList();
   auto yTop = drawList->GetClipRectMin().y;
@@ -275,7 +272,7 @@ void TextDiff::IntegratedView::renderText(Diff &diff) {
                          false);
 
   for (auto i = firstVisibleRow; i <= lastVisibleRow; i++) {
-    auto &row = rows[i];
+    const auto &row = rows[i];
     auto y = cursorScreenPos.y + i * glyphSize.y;
 
     switch (row.type) {
@@ -300,8 +297,8 @@ void TextDiff::IntegratedView::renderText(Diff &diff) {
 //
 
 void TextDiff::IntegratedView::renderLine(float x, float y,
-                                          TextEditorInternal::Line &line,
-                                          size_t sectionNo, Diff &diff) {
+                                          const TextEditorInternal::Line &line,
+                                          size_t sectionNo, const Diff &diff) {
   // draw colored glyphs for specified line
   auto drawList = ImGui::GetWindowDrawList();
 
@@ -311,7 +308,7 @@ void TextDiff::IntegratedView::renderLine(float x, float y,
   size_t endColumn;
 
   if (diff.config.wordWrap && line.sections) {
-    auto &section = line.sections->at(sectionNo);
+    const auto &section = line.sections->at(sectionNo);
     index = section.startIndex;
     column = section.indent;
     endColumn = section.columns;
@@ -381,78 +378,64 @@ void TextDiff::IntegratedView::renderLine(float x, float y,
 
 void TextDiff::IntegratedView::renderScrollbar() {
   auto maxColumnsWidth = maxColumns * glyphSize.x;
-
   if (maxColumnsWidth > textColumnWidth) {
     auto window = ImGui::GetCurrentWindow();
     const ImRect outerRect = window->Rect();
     auto borderSize = std::round(window->WindowBorderSize * 0.5f);
     auto scrollbarSize = ImGui::GetStyle().ScrollbarSize;
-
-    auto scrollbarTop = (std::max)(outerRect.Min.y + borderSize,
-                                 outerRect.Max.y - borderSize - scrollbarSize);
+    auto scrollbarTop =
+        (std::max)(outerRect.Min.y + borderSize,
+                   outerRect.Max.y - borderSize - scrollbarSize);
     ImRect scrollbarFrame(textPos, scrollbarTop, textEnd,
                           scrollbarTop + scrollbarSize);
     ImS64 scroll = static_cast<ImS64>(textScroll);
-
     if (ImGui::ScrollbarEx(
             scrollbarFrame, ImGui::GetID("textScroll"), ImGuiAxis_X, &scroll,
             static_cast<ImS64>(textColumnWidth),
             static_cast<ImS64>(maxColumnsWidth), ImDrawFlags_RoundCornersAll)) {
-
       textScroll = static_cast<float>(scroll);
     }
-
     if (ImGui::IsWindowFocused()) {
       textScroll = std::clamp(textScroll - ImGui::GetIO().MouseWheelH *
                                                ImGui::GetFontSize(),
                               0.0f, maxColumnsWidth - textColumnWidth);
-
       if (ImGui::IsKeyPressed(ImGuiKey_LeftArrow)) {
         textScroll = (std::max)(textScroll - glyphSize.x, 0.0f);
-
       } else if (ImGui::IsKeyPressed(ImGuiKey_RightArrow)) {
         textScroll = (std::min)(textScroll + glyphSize.x,
-                              maxColumnsWidth - textColumnWidth);
-
+                                maxColumnsWidth - textColumnWidth);
       } else if (ImGui::IsKeyPressed(ImGuiKey_Home)) {
         textScroll = 0.0f;
-
       } else if (ImGui::IsKeyPressed(ImGuiKey_End)) {
         textScroll = maxColumnsWidth - textColumnWidth;
       }
     }
-
   } else {
     // no scrolling if the text fits
     textScroll = 0.0f;
   }
-
   if (ImGui::IsWindowFocused()) {
     if (ImGui::IsKeyPressed(ImGuiKey_UpArrow)) {
       if (ImGui::IsKeyDown(ImGuiKey_ModCtrl)) {
         ImGui::SetScrollY(0.0f);
-
       } else {
         ImGui::SetScrollY((std::max)(ImGui::GetScrollY() - glyphSize.y, 0.0f));
       }
-
     } else if (ImGui::IsKeyPressed(ImGuiKey_DownArrow)) {
       if (ImGui::IsKeyDown(ImGuiKey_ModCtrl)) {
         ImGui::SetScrollY(ImGui::GetScrollMaxY());
-
       } else {
         ImGui::SetScrollY((std::min)(ImGui::GetScrollY() + glyphSize.y,
-                                   ImGui::GetScrollMaxY()));
+                                     ImGui::GetScrollMaxY()));
       }
-
     } else if (ImGui::IsKeyPressed(ImGuiKey_PageUp)) {
-      ImGui::SetScrollY((std::max)(
-          ImGui::GetScrollY() - (visibleRows - 2) * glyphSize.y, 0.0f));
-
+      ImGui::SetScrollY(
+          (std::max)(ImGui::GetScrollY() - (visibleRows - 2) * glyphSize.y,
+                     0.0f));
     } else if (ImGui::IsKeyPressed(ImGuiKey_PageDown)) {
       ImGui::SetScrollY(
           (std::min)(ImGui::GetScrollY() + (visibleRows - 2) * glyphSize.y,
-                   ImGui::GetScrollMaxY()));
+                     ImGui::GetScrollMaxY()));
     }
   }
 }
@@ -461,7 +444,7 @@ void TextDiff::IntegratedView::renderScrollbar() {
 //	TextDiff::IntegratedView::renderMiniMap
 //
 
-void TextDiff::IntegratedView::renderMiniMap(Diff &diff) {
+void TextDiff::IntegratedView::renderMiniMap(const Diff &diff) {
   // based on https://github.com/ocornut/imgui/issues/3114
   if (diff.config.showScrollbarMiniMap) {
     auto window = ImGui::GetCurrentWindow();
@@ -478,7 +461,7 @@ void TextDiff::IntegratedView::renderMiniMap(Diff &diff) {
 
       // render diff locations
       for (size_t i = 0; i < rows.size(); i++) {
-        auto &row = rows[i];
+        const auto &row = rows[i];
 
         if (row.type != DiffType::common) {
           auto color = (row.type == DiffType::added) ? diff.addedColor
@@ -516,7 +499,7 @@ void TextDiff::IntegratedView::updateLayout(Diff &diff) {
                         i, line.columns);
     }
 
-    maxColumns = (std::max)(maxColumns, line.columns);
+    maxColumns = std::max(maxColumns, line.columns);
   }
 }
 
@@ -525,7 +508,8 @@ void TextDiff::IntegratedView::updateLayout(Diff &diff) {
 //
 
 void TextDiff::SideBySideView::render(const char *title, const ImVec2 &size,
-                                      bool border, Diff &diff) {
+                                      ImGuiWindowFlags windowFlags, Diff &diff,
+                                      bool border) {
   // get font information
   font = ImGui::GetFont();
   fontSize = ImGui::GetFontSize();
@@ -533,17 +517,13 @@ void TextDiff::SideBySideView::render(const char *title, const ImVec2 &size,
       ImVec2(ImGui::CalcTextSize("#").x,
              ImGui::GetTextLineHeightWithSpacing() * diff.config.lineSpacing);
 
-  // determine flags
-  ImGuiWindowFlags windowFlags =
-      ImGuiWindowFlags_HorizontalScrollbar | ImGuiWindowFlags_NoNavInputs;
-
   // start rendering the widget
   ImGui::SetNextWindowContentSize(ImVec2(0.0f, glyphSize.y * rows.size()));
   ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.0f, 0.0f));
   ImGui::PushStyleColor(ImGuiCol_ChildBg,
                         ImGui::ColorConvertU32ToFloat4(diff.palette.get(
                             TextEditorInternal::Color::background)));
-  ImGui::BeginChild(title, size, false, windowFlags);
+  ImGui::BeginChild(title, size, border, windowFlags);
 
   // determine visible dimensions
   cursorScreenPos = ImGui::GetCursorScreenPos();
@@ -561,7 +541,7 @@ void TextDiff::SideBySideView::render(const char *title, const ImVec2 &size,
                     2.0f;
   textColumnWidth = std::floor(textColumnWidth / glyphSize.x) * glyphSize.x;
   diff.config.wordWrapColumns =
-      static_cast<size_t>((std::max)(textColumnWidth / glyphSize.x, 0.0f));
+      static_cast<size_t>(std::max(textColumnWidth / glyphSize.x, 0.0f));
 
   // update typesetters and update layout (if required)
   bool layoutChanged = false;
@@ -571,7 +551,7 @@ void TextDiff::SideBySideView::render(const char *title, const ImVec2 &size,
       rightTypeSetter.update(diff.config, diff.rightDocument, rightLineFold);
   bool viewChanged = diff.sideBySideMode != diff.previousSideBySideMode;
 
-  if (layoutChanged | viewChanged) {
+  if (layoutChanged || viewChanged) {
     updateLayout(diff);
   }
 
@@ -583,18 +563,18 @@ void TextDiff::SideBySideView::render(const char *title, const ImVec2 &size,
   rightTextEnd = rightTextPos + textColumnWidth;
 
   visibleRows =
-      (std::max)(static_cast<int>(std::ceil(visibleSize.y / glyphSize.y)), 0);
+      std::max(static_cast<int>(std::ceil(visibleSize.y / glyphSize.y)), 0);
   visibleColumns =
-      (std::max)(static_cast<int>(std::ceil(textColumnWidth / glyphSize.x)), 0);
+      std::max(static_cast<int>(std::ceil(textColumnWidth / glyphSize.x)), 0);
 
-  firstVisibleRow = (std::max)(
+  firstVisibleRow = std::max(
       static_cast<int>(std::floor(ImGui::GetScrollY() / glyphSize.y)), 0);
   lastVisibleRow =
-      (std::min)(static_cast<int>(std::floor(
+      std::min(static_cast<int>(std::floor(
                    (ImGui::GetScrollY() + visibleSize.y) / glyphSize.y)),
                static_cast<int>(rows.size() - 1));
   firstVisibleColumn =
-      (std::max)(static_cast<int>(std::floor(textScroll / glyphSize.x)), 0);
+      std::max(static_cast<int>(std::floor(textScroll / glyphSize.x)), 0);
   lastVisibleColumn = static_cast<int>(
       std::floor((textScroll + textColumnWidth) / glyphSize.x));
   firstRenderableColumn =
@@ -614,14 +594,14 @@ void TextDiff::SideBySideView::render(const char *title, const ImVec2 &size,
 //	TextDiff::SideBySideView::renderBackground
 //
 
-void TextDiff::SideBySideView::renderBackground(Diff &diff) {
+void TextDiff::SideBySideView::renderBackground(const Diff &diff) {
   // render line numbers and text backgrounds
   auto drawList = ImGui::GetWindowDrawList();
   auto y = cursorScreenPos.y + firstVisibleRow * glyphSize.y;
   char buffer[32];
 
   for (auto i = firstVisibleRow; i <= lastVisibleRow; i++) {
-    auto &row = rows[i];
+    const auto &row = rows[i];
 
     auto lineLeft = static_cast<int>(row.leftLine + 1);
     auto lineRight = static_cast<int>(row.rightLine + 1);
@@ -682,7 +662,7 @@ void TextDiff::SideBySideView::renderBackground(Diff &diff) {
 //	TextDiff::SideBySideView::renderText
 //
 
-void TextDiff::SideBySideView::renderText(Diff &diff) {
+void TextDiff::SideBySideView::renderText(const Diff &diff) {
   // setup rendering
   auto drawList = ImGui::GetWindowDrawList();
   auto yTop = drawList->GetClipRectMin().y;
@@ -698,7 +678,7 @@ void TextDiff::SideBySideView::renderText(Diff &diff) {
                          ImVec2(rightLineNumberPos, yBottom), false);
 
   for (auto i = firstVisibleRow; i <= lastVisibleRow; i++) {
-    auto &row = rows[i];
+    const auto &row = rows[i];
     auto y = cursorScreenPos.y + i * glyphSize.y;
 
     switch (row.type) {
@@ -720,7 +700,7 @@ void TextDiff::SideBySideView::renderText(Diff &diff) {
                          ImVec2(rightTextEnd, yBottom), false);
 
   for (auto i = firstVisibleRow; i <= lastVisibleRow; i++) {
-    auto &row = rows[i];
+    const auto &row = rows[i];
     auto y = cursorScreenPos.y + i * glyphSize.y;
 
     switch (row.type) {
@@ -743,8 +723,8 @@ void TextDiff::SideBySideView::renderText(Diff &diff) {
 //
 
 void TextDiff::SideBySideView::renderLine(float x, float y,
-                                          TextEditorInternal::Line &line,
-                                          size_t sectionNo, Diff &diff) {
+                                          const TextEditorInternal::Line &line,
+                                          size_t sectionNo, const Diff &diff) {
   // draw colored glyphs for specified line
   auto drawList = ImGui::GetWindowDrawList();
 
@@ -754,7 +734,7 @@ void TextDiff::SideBySideView::renderLine(float x, float y,
   size_t endColumn;
 
   if (diff.config.wordWrap && line.sections) {
-    auto &section = line.sections->at(sectionNo);
+    const auto &section = line.sections->at(sectionNo);
     index = section.startIndex;
     column = section.indent;
     endColumn = section.columns;
@@ -826,12 +806,12 @@ void TextDiff::SideBySideView::renderScrollbars() {
   auto maxColumnsWidth = maxColumns * glyphSize.x;
 
   if (maxColumnsWidth > textColumnWidth) {
-    auto window = ImGui::GetCurrentWindow();
-    const ImRect outerRect = window->Rect();
+    const ImGuiWindow *window = ImGui::GetCurrentWindow();
+    ImRect outerRect = window->Rect();
     auto borderSize = std::round(window->WindowBorderSize * 0.5f);
     auto scrollbarSize = ImGui::GetStyle().ScrollbarSize;
 
-    auto scrollbarTop = (std::max)(outerRect.Min.y + borderSize,
+    auto scrollbarTop = std::max(outerRect.Min.y + borderSize,
                                  outerRect.Max.y - borderSize - scrollbarSize);
     ImRect leftScrollbarFrame(leftTextPos, scrollbarTop, rightLineNumberPos,
                               scrollbarTop + scrollbarSize);
@@ -843,7 +823,6 @@ void TextDiff::SideBySideView::renderScrollbars() {
             leftScrollbarFrame, ImGui::GetID("leftTextScroll"), ImGuiAxis_X,
             &scroll, static_cast<ImS64>(textColumnWidth),
             static_cast<ImS64>(maxColumnsWidth), ImDrawFlags_RoundCornersAll)) {
-
       textScroll = static_cast<float>(scroll);
     }
 
@@ -851,7 +830,6 @@ void TextDiff::SideBySideView::renderScrollbars() {
             rightScrollbarFrame, ImGui::GetID("rightTextScroll"), ImGuiAxis_X,
             &scroll, static_cast<ImS64>(textColumnWidth),
             static_cast<ImS64>(maxColumnsWidth), ImDrawFlags_RoundCornersAll)) {
-
       textScroll = static_cast<float>(scroll);
     }
 
@@ -861,15 +839,12 @@ void TextDiff::SideBySideView::renderScrollbars() {
                               0.0f, maxColumnsWidth - textColumnWidth);
 
       if (ImGui::IsKeyPressed(ImGuiKey_LeftArrow)) {
-        textScroll = (std::max)(textScroll - glyphSize.x, 0.0f);
-
+        textScroll = std::max(textScroll - glyphSize.x, 0.0f);
       } else if (ImGui::IsKeyPressed(ImGuiKey_RightArrow)) {
-        textScroll = (std::min)(textScroll + glyphSize.x,
+        textScroll = std::min(textScroll + glyphSize.x,
                               maxColumnsWidth - textColumnWidth);
-
       } else if (ImGui::IsKeyPressed(ImGuiKey_Home)) {
         textScroll = 0.0f;
-
       } else if (ImGui::IsKeyPressed(ImGuiKey_End)) {
         textScroll = maxColumnsWidth - textColumnWidth;
       }
@@ -884,27 +859,22 @@ void TextDiff::SideBySideView::renderScrollbars() {
     if (ImGui::IsKeyPressed(ImGuiKey_UpArrow)) {
       if (ImGui::IsKeyDown(ImGuiKey_ModCtrl)) {
         ImGui::SetScrollY(0.0f);
-
       } else {
-        ImGui::SetScrollY((std::max)(ImGui::GetScrollY() - glyphSize.y, 0.0f));
+        ImGui::SetScrollY(std::max(ImGui::GetScrollY() - glyphSize.y, 0.0f));
       }
-
     } else if (ImGui::IsKeyPressed(ImGuiKey_DownArrow)) {
       if (ImGui::IsKeyDown(ImGuiKey_ModCtrl)) {
         ImGui::SetScrollY(ImGui::GetScrollMaxY());
-
       } else {
-        ImGui::SetScrollY((std::min)(ImGui::GetScrollY() + glyphSize.y,
+        ImGui::SetScrollY(std::min(ImGui::GetScrollY() + glyphSize.y,
                                    ImGui::GetScrollMaxY()));
       }
-
     } else if (ImGui::IsKeyPressed(ImGuiKey_PageUp)) {
-      ImGui::SetScrollY((std::max)(
+      ImGui::SetScrollY(std::max(
           ImGui::GetScrollY() - (visibleRows - 2) * glyphSize.y, 0.0f));
-
     } else if (ImGui::IsKeyPressed(ImGuiKey_PageDown)) {
       ImGui::SetScrollY(
-          (std::min)(ImGui::GetScrollY() + (visibleRows - 2) * glyphSize.y,
+          std::min(ImGui::GetScrollY() + (visibleRows - 2) * glyphSize.y,
                    ImGui::GetScrollMaxY()));
     }
   }
@@ -914,7 +884,7 @@ void TextDiff::SideBySideView::renderScrollbars() {
 //	TextDiff::SideBySideView::renderMiniMap
 //
 
-void TextDiff::SideBySideView::renderMiniMap(Diff &diff) {
+void TextDiff::SideBySideView::renderMiniMap(const Diff &diff) {
   // based on https://github.com/ocornut/imgui/issues/3114
   if (diff.config.showScrollbarMiniMap) {
     auto window = ImGui::GetCurrentWindow();
@@ -931,7 +901,7 @@ void TextDiff::SideBySideView::renderMiniMap(Diff &diff) {
 
       // render diff locations
       for (size_t i = 0; i < rows.size(); i++) {
-        auto &row = rows[i];
+        const auto &row = rows[i];
 
         if (row.type != DiffType::common) {
           auto color = (row.type == DiffType::added) ? diff.addedColor
@@ -965,7 +935,7 @@ void TextDiff::SideBySideView::updateLayout(Diff &diff) {
                           lineState.rightLine, i, line.columns);
       }
 
-      maxColumns = (std::max)(maxColumns, line.columns);
+      maxColumns = std::max(maxColumns, line.columns);
       break;
     }
 
@@ -977,7 +947,7 @@ void TextDiff::SideBySideView::updateLayout(Diff &diff) {
                           line.columns);
       }
 
-      maxColumns = (std::max)(maxColumns, line.columns);
+      maxColumns = std::max(maxColumns, line.columns);
       break;
     }
 
@@ -989,7 +959,7 @@ void TextDiff::SideBySideView::updateLayout(Diff &diff) {
                           line.columns);
       }
 
-      maxColumns = (std::max)(maxColumns, line.columns);
+      maxColumns = std::max(maxColumns, line.columns);
       break;
     }
     }

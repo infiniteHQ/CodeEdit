@@ -7,6 +7,14 @@
 
 #pragma once
 
+//	TextDiff - A syntax highlighting text diff widget for Dear ImGui.
+//	Copyright (c) 2024-2026 Johan A. Goossens. All rights reserved.
+//
+//	This work is licensed under the terms of the MIT license.
+//	For a copy, see <https://opensource.org/licenses/MIT>.
+
+#pragma once
+
 //
 //	Include files
 //
@@ -17,7 +25,7 @@
 //	TextDiff
 //
 
-class TextDiff {
+class IMGUI_API TextDiff {
 public:
   // constructor
   TextDiff();
@@ -28,7 +36,7 @@ public:
   inline void SetTabSize(size_t value) { diff.config.tabSize = value; }
   inline size_t GetTabSize() const { return diff.config.tabSize; }
   inline void SetLineSpacing(float value) {
-    diff.config.lineSpacing = (std::max)(1.0f, (std::min)(2.0f, value));
+    diff.config.lineSpacing = std::max(1.0f, std::min(2.0f, value));
   }
   inline float GetLineSpacing() const { return diff.config.lineSpacing; }
   inline void SetWordWrapEnabled(bool value) { diff.config.wordWrap = value; }
@@ -78,7 +86,13 @@ public:
   void SetText(const std::string_view &left, const std::string_view &right);
 
   // render text diff in a Dear ImGui context
+  // note: if you overwrite windowFlags to for instance add
+  // ImGuiWindowFlags_NoSavedSettings ensure you keep the default as it is
+  // required for the diff widget
+  // - ImGuiWindowFlags_NoMove to ensure mouse drag event are passed to the diff
+  // widget
   void Render(const char *title, const ImVec2 &size = ImVec2(),
+              ImGuiWindowFlags windowFlags = ImGuiWindowFlags_NoMove,
               bool border = false);
 
 private:
@@ -177,13 +191,14 @@ private:
     TextEditorInternal::TypeSetter rightTypeSetter;
 
     // rendering functions
-    void render(const char *title, const ImVec2 &size, bool border, Diff &diff);
-    void renderBackground(Diff &diff);
-    void renderText(Diff &diff);
-    void renderLine(float x, float y, TextEditorInternal::Line &line,
-                    size_t section, Diff &diff);
+    void render(const char *title, const ImVec2 &size,
+                ImGuiWindowFlags windowFlags, Diff &diff, bool border = false);
+    void renderBackground(const Diff &diff);
+    void renderText(const Diff &diff);
+    void renderLine(float x, float y, const TextEditorInternal::Line &line,
+                    size_t section, const Diff &diff);
     void renderScrollbar();
-    void renderMiniMap(Diff &diff);
+    void renderMiniMap(const Diff &diff);
 
     // layout functions
     void updateLayout(Diff &diff);
@@ -248,21 +263,22 @@ private:
     TextEditorInternal::TypeSetter rightTypeSetter;
 
     // rendering functions
-    void render(const char *title, const ImVec2 &size, bool border, Diff &diff);
-    void renderBackground(Diff &diff);
-    void renderText(Diff &diff);
-    void renderLine(float x, float y, TextEditorInternal::Line &line,
-                    size_t section, Diff &diff);
+    void render(const char *title, const ImVec2 &size,
+                ImGuiWindowFlags windowFlags, Diff &diff, bool border = false);
+    void renderBackground(const Diff &diff);
+    void renderText(const Diff &diff);
+    void renderLine(float x, float y, const TextEditorInternal::Line &line,
+                    size_t section, const Diff &diff);
     void renderScrollbars();
-    void renderMiniMap(Diff &diff);
+    void renderMiniMap(const Diff &diff);
 
     // layout functions
     void updateLayout(Diff &diff);
   } sideBySideView;
 
   // split string into lines
-  void splitLines(std::vector<std::string_view> &result,
-                  const std::string_view &text);
+  static void splitLines(std::vector<std::string_view> &result,
+                         const std::string_view &text);
 
   // update the color palette
   void updatePalette();
