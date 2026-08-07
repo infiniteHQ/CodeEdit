@@ -108,7 +108,7 @@ void TextEditorInternal::render(const char *title, const ImVec2 &size,
                           (config.showMiniMap ? config.miniMapWidth : 0.0f),
                       0.0f);
     config.wordWrapColumns = static_cast<size_t>(
-        std::max(std::floor(textSize.x / glyphSize.x), 0.0f));
+        (std::max)(std::floor(textSize.x / glyphSize.x), 0.0f));
 
     // handle possible state changes caused by API calls before first frame or
     // between frames
@@ -123,14 +123,14 @@ void TextEditorInternal::render(const char *title, const ImVec2 &size,
     handleMouseInteractions();
 
     // determine visible row/column limits
-    firstVisibleRow = std::max(
+    firstVisibleRow = (std::max)(
         static_cast<size_t>(std::floor(ImGui::GetScrollY() / glyphSize.y)),
         static_cast<size_t>(0));
     lastVisibleRow =
-        std::min(static_cast<size_t>(std::ceil(
+        (std::min)(static_cast<size_t>(std::ceil(
                      (ImGui::GetScrollY() + textSize.y) / glyphSize.y)),
                  typeSetter.getRowCount() - 1);
-    firstVisibleColumn = std::max(
+    firstVisibleColumn = (std::max)(
         static_cast<size_t>(std::floor(ImGui::GetScrollX() / glyphSize.x)),
         static_cast<size_t>(0));
     lastVisibleColumn = static_cast<size_t>(
@@ -354,7 +354,7 @@ void TextEditorInternal::renderMatchingBracketLines() {
     for (auto bracket = bracketeer.begin(); bracket < bracketeer.end();
          bracket++) {
       if (bracket->visible && bracket->end.line - bracket->start.line > 1) {
-        auto column = std::min(docPos2VisPos(bracket->start).column,
+        auto column = (std::min)(docPos2VisPos(bracket->start).column,
                                docPos2VisPos(bracket->end).column);
 
         for (size_t i = bracket->start.line + 1; i < bracket->end.line; i++) {
@@ -719,7 +719,7 @@ void TextEditorInternal::renderMiniMap() {
           scrollRatio * (totalMiniMapRows - visibleMiniMapRows));
       lastMiniMapRow =
           firstMiniMapRow + static_cast<size_t>(std::ceil(visibleMiniMapRows));
-      lastMiniMapRow = std::min(lastMiniMapRow, totalMiniMapRows);
+      lastMiniMapRow = (std::min)(lastMiniMapRow, totalMiniMapRows);
     }
 
     // process all visible minimap rows
@@ -1294,10 +1294,10 @@ void TextEditorInternal::handleMouseInteractions() {
   } else if (scrolling) {
     float deadzone = glyphSize.x;
     auto offset = scrollStart - absoluteMousePos;
-    offset.x = (offset.x < 0.0f) ? std::min(offset.x + deadzone, 0.0f)
-                                 : std::max(offset.x - deadzone, 0.0f);
-    offset.y = (offset.y < 0.0f) ? std::min(offset.y + deadzone, 0.0f)
-                                 : std::max(offset.y - deadzone, 0.0f);
+    offset.x = (offset.x < 0.0f) ? (std::min)(offset.x + deadzone, 0.0f)
+                                 : (std::max)(offset.x - deadzone, 0.0f);
+    offset.y = (offset.y < 0.0f) ? (std::min)(offset.y + deadzone, 0.0f)
+                                 : (std::max)(offset.y - deadzone, 0.0f);
 
     float scrollFactor = ImGui::GetIO().DeltaTime * 5.0f;
     offset *= scrollFactor;
@@ -1754,7 +1754,7 @@ void TextEditorInternal::redo() {
 
 TextEditorInternal::DocPos
 TextEditorInternal::getCursorPosition(size_t cursor) const {
-  cursor = std::min(cursor, cursors.size() - 1);
+  cursor = (std::min)(cursor, cursors.size() - 1);
   return cursors[cursor].getInteractiveEnd();
 }
 
@@ -1764,7 +1764,7 @@ TextEditorInternal::getCursorPosition(size_t cursor) const {
 
 TextEditorInternal::DocSelection
 TextEditorInternal::getCursorSelection(size_t cursor) const {
-  cursor = std::min(cursor, cursors.size() - 1);
+  cursor = (std::min)(cursor, cursors.size() - 1);
   auto start = cursors[cursor].getSelectionStart();
   auto end = cursors[cursor].getSelectionEnd();
   return DocSelection(start, end);
@@ -1851,7 +1851,7 @@ void TextEditorInternal::setCursor(DocPos pos) {
 
 void TextEditorInternal::scrollToLine(size_t line, Scroll alignment) {
   ensureVisiblePos = DocPos(invalidLine, 0);
-  scrollToLineNumber = std::min(line, document.size());
+  scrollToLineNumber = (std::min)(line, document.size());
   scrollToAlignment = alignment;
 
   if (config.lineFolding) {
@@ -1873,17 +1873,17 @@ void TextEditorInternal::handlePossibleScrolling() {
     auto pos = docPos2VisPos(ensureVisiblePos);
 
     if (pos.row <= firstVisibleRow + 1) {
-      scrollY = std::max(0.0f, (pos.row - 2.0f) * glyphSize.y);
+      scrollY = (std::max)(0.0f, (pos.row - 2.0f) * glyphSize.y);
 
     } else if (pos.row >= lastVisibleRow - 1) {
-      scrollY = std::max(0.0f, (pos.row + 2.0f) * glyphSize.y - textSize.y);
+      scrollY = (std::max)(0.0f, (pos.row + 2.0f) * glyphSize.y - textSize.y);
     }
 
     if (pos.column <= firstVisibleColumn + 1) {
-      scrollX = std::max(0.0f, (pos.column - 2.0f) * glyphSize.x);
+      scrollX = (std::max)(0.0f, (pos.column - 2.0f) * glyphSize.x);
 
     } else if (pos.column >= lastVisibleColumn - 1) {
-      scrollX = std::max(0.0f, (pos.column + 2.0f) * glyphSize.x - textSize.x);
+      scrollX = (std::max)(0.0f, (pos.column + 2.0f) * glyphSize.x - textSize.x);
     }
 
     ensureVisiblePos.line = invalidLine;
@@ -1902,11 +1902,11 @@ void TextEditorInternal::handlePossibleScrolling() {
       break;
 
     case Scroll::alignMiddle:
-      scrollY = std::max(0.0f, (row - visibleRows / 2.0f) * glyphSize.y);
+      scrollY = (std::max)(0.0f, (row - visibleRows / 2.0f) * glyphSize.y);
       break;
 
     case Scroll::alignBottom:
-      scrollY = std::max(0.0f, (row - (visibleRows - 1.0f)) * glyphSize.y);
+      scrollY = (std::max)(0.0f, (row - (visibleRows - 1.0f)) * glyphSize.y);
       break;
     }
 
@@ -2547,7 +2547,7 @@ void TextEditorInternal::stripTrailingWhitespaces() {
   for (size_t i = 0; i < document.size(); i++) {
     auto &line = document[i];
     size_t lineSize = line.size();
-    size_t whitespace = std::numeric_limits<size_t>::max();
+    size_t whitespace = (std::numeric_limits<size_t>::max)();
     bool done = false;
 
     // look for first non-whitespace glyph at the end of the line
@@ -2567,7 +2567,7 @@ void TextEditorInternal::stripTrailingWhitespaces() {
     }
 
     // remove whitespaces (if required)
-    if (whitespace != std::numeric_limits<size_t>::max()) {
+    if (whitespace != (std::numeric_limits<size_t>::max)()) {
       deleteText(transaction, DocPos(i, whitespace), DocPos(i, lineSize));
     }
   }
@@ -4785,10 +4785,10 @@ void TextEditorInternal::renderFindReplace() {
     auto optionWidth = ImGui::CalcTextSize("Aa").x + style.ItemSpacing.x * 2.0f;
 
     if (!config.readOnly) {
-      button1Width = std::max(
+      button1Width = (std::max)(
           button1Width, ImGui::CalcTextSize(replaceButtonLabel.c_str()).x +
                             style.ItemSpacing.x * 2.0f);
-      button2Width = std::max(
+      button2Width = (std::max)(
           button2Width, ImGui::CalcTextSize(replaceAllButtonLabel.c_str()).x +
                             style.ItemSpacing.x * 2.0f);
     }
@@ -6957,8 +6957,7 @@ static LBC getLineBreakClass(ImWchar codepoint) {
 //
 //	State machine status
 //
-
-static constexpr size_t invalidPos = std::numeric_limits<size_t>::max();
+static constexpr size_t invalidPos = (std::numeric_limits<size_t>::max)();
 static constexpr ImWchar dotCircle = 0x25CC;
 
 struct LineBreakGlyph {
@@ -8343,7 +8342,7 @@ void TextEditorInternal::TypeSetter::wrapLine(Line &line) {
     line.columns = 0;
 
     for (auto &section : sections) {
-      line.columns = std::max(line.columns, section.columns);
+      line.columns = (std::max)(line.columns, section.columns);
     }
 
   } else {
@@ -8440,7 +8439,7 @@ bool TextEditorInternal::TypeSetter::update(const Config &config,
       if (line.foldingState != FoldingState::hidden) {
         // update total rows and columns
         totalRows += line.rows;
-        totalColumns = std::max(totalColumns, line.columns);
+        totalColumns = (std::max)(totalColumns, line.columns);
 
         // add row(s) and handle word wrapping (if required)
         if (line.sections) {
@@ -8900,7 +8899,7 @@ bool TextEditorInternal::AutoComplete::render(
 
   auto suggestions = state.suggestions.size();
   auto visibleSuggestions =
-      (suggestions == 0) ? 1 : std::min(static_cast<size_t>(10), suggestions);
+      (suggestions == 0) ? 1 : (std::min)(static_cast<size_t>(10), suggestions);
   auto &style = ImGui::GetStyle();
   auto height = ImGui::GetFrameHeightWithSpacing() * visibleSuggestions +
                 style.WindowPadding.y * 2.0f;

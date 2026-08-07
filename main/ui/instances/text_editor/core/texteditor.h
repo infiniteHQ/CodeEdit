@@ -141,7 +141,7 @@ public:
   }
   inline bool IsInsertSpacesOnTabs() const { return config.insertSpacesOnTabs; }
   inline void SetLineSpacing(float value) {
-    config.lineSpacing = std::max(1.0f, std::min(2.0f, value));
+    config.lineSpacing = (std::max)(1.0f, (std::min)(2.0f, value));
   }
   inline float GetLineSpacing() const { return config.lineSpacing; }
   inline void SetWordWrapEnabled(bool value) { config.wordWrap = value; }
@@ -2071,7 +2071,7 @@ protected:
   }
 
   // rendering context
-  static constexpr size_t invalidLine = std::numeric_limits<size_t>::max();
+  static constexpr size_t invalidLine = (std::numeric_limits<size_t>::max)();
 
   static constexpr size_t leftMargin = 1; // margins are expressed in glyphs
   static constexpr size_t decorationMargin = 1;

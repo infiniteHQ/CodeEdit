@@ -28,7 +28,7 @@ public:
   inline void SetTabSize(size_t value) { diff.config.tabSize = value; }
   inline size_t GetTabSize() const { return diff.config.tabSize; }
   inline void SetLineSpacing(float value) {
-    diff.config.lineSpacing = std::max(1.0f, std::min(2.0f, value));
+    diff.config.lineSpacing = (std::max)(1.0f, (std::min)(2.0f, value));
   }
   inline float GetLineSpacing() const { return diff.config.lineSpacing; }
   inline void SetWordWrapEnabled(bool value) { diff.config.wordWrap = value; }
