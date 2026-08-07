@@ -137,8 +137,9 @@ private:
 
   TrieAutoComplete trieAutoComplete;
   LspBridge lsp;
-  static constexpr int lspOptions =
-      LspBridge::autocomplete | LspBridge::showHoverHelp;
+  static constexpr int lspOptions = LspBridge::autocomplete |
+                                    LspBridge::showHoverHelp |
+                                    LspBridge::showDiagnostics;
   Notifications notifications;
 
   bool demoTrieAutoComplete = false;

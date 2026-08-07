@@ -53,23 +53,21 @@ bool LspBridge::Start(const std::string &rootPath,
     auto initializeParams = lsp::requests::Initialize::Params();
     initializeParams.processId = lsp::Process::currentProcessId();
     initializeParams.rootUri = lsp::DocumentUri::fromPath(rootPath);
-
     initializeParams.capabilities = {
         .textDocument =
             lsp::TextDocumentClientCapabilities{
-                // .completion = lsp::CompletionClientCapabilities {
-                // 	.completionItem =
-                // lsp::CompletionClientCapabilitiesCompletionItem {
-                // 		.insertTextModeSupport =
-                // lsp::CompletionClientCapabilitiesCompletionItemInsertTextModeSupport
-                // {
-                // 			.valueSet =
-                // lsp::Array<lsp::InsertTextModeEnum>{
-                // 				lsp::InsertTextMode::AsIs
-                // 			}
-                // 		}
-                // 	}
-                // },
+                .completion =
+                    lsp::CompletionClientCapabilities{
+                        .completionItem =
+                            lsp::CompletionClientCapabilitiesCompletionItem{
+                                .snippetSupport = true,
+                                .documentationFormat =
+                                    lsp::Array<lsp::MarkupKindEnum>{
+                                        lsp::MarkupKind::PlainText},
+                                .insertReplaceSupport = true,
+                            },
+                        .contextSupport = true,
+                    },
                 .hover =
                     lsp::HoverClientCapabilities{
                         .contentFormat = {{lsp::MarkupKind::PlainText}}}},
@@ -88,6 +86,18 @@ bool LspBridge::Start(const std::string &rootPath,
     // send the 'initialized' notification to let the server know that the
     // client is ready
     messageHandler->sendNotification<lsp::notifications::Initialized>({});
+
+    messageHandler->add<lsp::notifications::TextDocument_PublishDiagnostics>(
+        [this](lsp::notifications::TextDocument_PublishDiagnostics::Params
+                   &&params) {
+          auto path = std::string(params.uri.path());
+
+          auto i = documents.find(path);
+          if (i != documents.end()) {
+            i->second.applyDiagnostics(params.diagnostics);
+          }
+        });
+
     return true;
 
   } catch (const std::exception &e) {
@@ -97,6 +107,24 @@ bool LspBridge::Start(const std::string &rootPath,
     errorMessage = ss.str();
     return false;
   }
+}
+
+void LspBridge::Document::applyDiagnostics(
+    const lsp::Array<lsp::Diagnostic> &diagnostics) {
+  std::scoped_lock lock(mutex);
+  pendingDiagnostics.clear();
+
+  for (auto &diag : diagnostics) {
+    pendingDiagnostics.push_back(
+        {.start = {static_cast<size_t>(diag.range.start.line),
+                   static_cast<size_t>(diag.range.start.character)},
+         .end = {static_cast<size_t>(diag.range.end.line),
+                 static_cast<size_t>(diag.range.end.character)},
+         .message = diag.message,
+         .severity = diag.severity ? static_cast<int>(*diag.severity) : 1});
+  }
+
+  diagnosticsDirty = true;
 }
 
 //
@@ -289,8 +317,24 @@ LspBridge::Document::Document(LspBridge &bridge, const std::string &path,
               auto list = result.get<lsp::CompletionList>();
 
               for (auto &item : list.items) {
-                if (item.insertText) {
-                  suggestions.emplace_back(*item.insertText);
+                std::string text;
+
+                if (item.textEdit) {
+                  if (std::holds_alternative<lsp::TextEdit>(*item.textEdit)) {
+                    text = std::get<lsp::TextEdit>(*item.textEdit).newText;
+                  } else if (std::holds_alternative<lsp::InsertReplaceEdit>(
+                                 *item.textEdit)) {
+                    text = std::get<lsp::InsertReplaceEdit>(*item.textEdit)
+                               .newText;
+                  }
+                } else if (item.insertText) {
+                  text = *item.insertText;
+                } else {
+                  text = item.label;
+                }
+
+                if (!text.empty()) {
+                  suggestions.emplace_back(std::move(text));
                 }
               }
             }
@@ -434,5 +478,33 @@ void LspBridge::Document::update() {
     } else {
       editor.ClearTextHoverCallback();
     }
+  }
+
+  if ((options & showDiagnostics) && diagnosticsDirty) {
+    std::scoped_lock lock(mutex);
+
+    constexpr size_t diagnosticSquiggleType = 1;
+
+    editor.ClearSquiggles(diagnosticSquiggleType);
+
+    for (auto &diag : pendingDiagnostics) {
+      ImU32 color;
+      switch (diag.severity) {
+      case 1:
+        color = IM_COL32(224, 64, 64, 255);
+        break;
+      case 2:
+        color = IM_COL32(224, 192, 64, 255);
+        break;
+      default:
+        color = IM_COL32(96, 160, 224, 255);
+        break;
+      }
+
+      editor.AddSquiggle(diag.start, diag.end, diagnosticSquiggleType, color,
+                         diag.message);
+    }
+
+    diagnosticsDirty = false;
   }
 }

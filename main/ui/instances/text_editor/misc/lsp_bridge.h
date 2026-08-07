@@ -43,6 +43,7 @@ public:
   static constexpr int autocomplete = 1 << 0;
   static constexpr int showSignature = 1 << 1;
   static constexpr int showHoverHelp = 1 << 2;
+  static constexpr int showDiagnostics = 1 << 3;
 
   // open/close documents (server can handle multiple at the time)
   void OpenDocument(const std::string &path, TextEditorInternal &editor,
@@ -80,6 +81,7 @@ private:
 
     // update document state
     void update();
+    void applyDiagnostics(const lsp::Array<lsp::Diagnostic> &diagnostics);
 
   private:
     // properties
@@ -93,6 +95,15 @@ private:
     std::vector<std::string> suggestions;
     std::vector<std::string> signatures;
     std::string hoverMessage;
+
+    struct Diagnostic {
+      TextEditorInternal::DocPos start;
+      TextEditorInternal::DocPos end;
+      std::string message;
+      int severity;
+    };
+    std::vector<Diagnostic> pendingDiagnostics;
+    bool diagnosticsDirty = false;
 
     TextEditorInternal::DocPos mouseDocPos;
   };

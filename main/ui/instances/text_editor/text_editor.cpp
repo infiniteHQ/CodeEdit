@@ -423,33 +423,41 @@ void TextEditorAppWindow::toggleTrieAutoComplete() {
     notifications.Add(Notifications::Type::info, "Autocomplete deactivated");
   }
 }
-
 void TextEditorAppWindow::toggleLspBridge() {
-  // see if we are turning it on or off
   if (demoLspBridge) {
-    // deactivate trie autocomplete (if required)
     if (demoTrieAutoComplete) {
       demoTrieAutoComplete = false;
       toggleTrieAutoComplete();
     }
 
-    // start the language server
-    if (lsp.Start(std::filesystem::current_path().string(), "clangd",
-                  {"--log=error"})) {
-      notifications.Add(Notifications::Type::info, "Started language server");
+    auto language = core_editor.GetLanguageName();
+    std::string executable;
+    std::vector<std::string> args;
 
-      if (core_editor.GetLanguageName() == "C++") {
-        lsp.OpenDocument(m_FilePath, core_editor, lspOptions);
-      }
-
+    if (language == "C++" || language == "C") {
+      executable = "clangd";
+      args = {"--background-index",          "--all-scopes-completion",
+              "--completion-style=detailed", "--header-insertion=iwyu",
+              "--pch-storage=memory",        "--log=error"};
+    } else if (language == "Lua") {
+      executable = "lua-language-server";
+      args = {};
     } else {
-      // report possible errors
+      notifications.Add(Notifications::Type::error,
+                        "No lsp server for this language", 4000);
+      demoLspBridge = false;
+      return;
+    }
+
+    if (lsp.Start(std::filesystem::current_path().string(), executable, args)) {
+      notifications.Add(Notifications::Type::info, "Started language server");
+      lsp.OpenDocument(m_FilePath, core_editor, lspOptions);
+    } else {
       notifications.Add(Notifications::Type::error, lsp.GetError(), 6000);
       demoLspBridge = false;
     }
 
   } else {
-    // stop the language server
     lsp.Stop();
     notifications.Add(Notifications::Type::info, "Stopped language server");
   }
