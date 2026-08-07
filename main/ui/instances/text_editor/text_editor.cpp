@@ -404,6 +404,57 @@ FileTypes TextEditorAppWindow::detect_file(const std::string &path) {
 
 void TextEditorAppWindow::RenderCustomMenu() { CherryGUI::Text("Helo"); }
 
+void TextEditorAppWindow::toggleTrieAutoComplete() {
+  // see if we are turning it on or off
+  if (demoTrieAutoComplete) {
+    // deactivate language server demo (if required)
+    if (demoLspBridge) {
+      demoLspBridge = false;
+      toggleLspBridge();
+    }
+
+    // connect autocomplete helper to editor
+    trieAutoComplete.Connect(&core_editor);
+    notifications.Add(Notifications::Type::info, "Autocomplete activated");
+
+  } else {
+    // disconnect autocomplete helper from editor
+    trieAutoComplete.Disconnect();
+    notifications.Add(Notifications::Type::info, "Autocomplete deactivated");
+  }
+}
+
+void TextEditorAppWindow::toggleLspBridge() {
+  // see if we are turning it on or off
+  if (demoLspBridge) {
+    // deactivate trie autocomplete (if required)
+    if (demoTrieAutoComplete) {
+      demoTrieAutoComplete = false;
+      toggleTrieAutoComplete();
+    }
+
+    // start the language server
+    if (lsp.Start(std::filesystem::current_path().string(), "clangd",
+                  {"--log=error"})) {
+      notifications.Add(Notifications::Type::info, "Started language server");
+
+      if (core_editor.GetLanguageName() == "C++") {
+        lsp.OpenDocument(m_FilePath, core_editor, lspOptions);
+      }
+
+    } else {
+      // report possible errors
+      notifications.Add(Notifications::Type::error, lsp.GetError(), 6000);
+      demoLspBridge = false;
+    }
+
+  } else {
+    // stop the language server
+    lsp.Stop();
+    notifications.Add(Notifications::Type::info, "Stopped language server");
+  }
+}
+
 void TextEditorAppWindow::Render() {
 
   vxe::push_custom_menu("TextEdit", [this]() { RenderCustomMenu(); });
@@ -467,9 +518,25 @@ void TextEditorAppWindow::Render() {
 
   auto test = CherryGUI::GetContentRegionAvail();
 
-  auto &editor = ModuleUI::TextArea(
-      &test.x, &test.y, &m_FileEditBuffer, &m_TextSize, &m_CurrentLine,
-      &m_CurrentColumn, &m_TotalLines, &m_CurrentLanguageDef, &m_CanOverrite);
+  auto &style = ImGui::GetStyle();
+  auto &editor =
+      ModuleUI::TextArea(&test.x, &test.y, &m_FileEditBuffer, &m_TextSize,
+                         &m_CurrentLine, &m_CurrentColumn, &m_TotalLines,
+                         &m_CurrentLanguageDef, &m_CanOverrite, &core_editor);
+  if (lsp.IsRunning()) {
+    lsp.Update(m_FilePath);
+  }
+
+  auto statusBarHeight = ImGui::GetFrameHeight() + 2.0f * style.WindowPadding.y;
+  // render notifications
+  auto mainWindowSize = ImGui::GetMainViewport()->Size;
+  auto mainWindowPos = ImGui::GetMainViewport()->Pos;
+  float offset = statusBarHeight + style.ItemSpacing.y * 2.0f;
+
+  notifications.Render(ImVec2(mainWindowPos.x + mainWindowSize.x -
+                                  ImGui::GetStyle().ItemSpacing.x,
+                              mainWindowPos.y + mainWindowSize.y -
+                                  ImGui::GetStyle().ItemSpacing.y - offset));
 
   if (!m_FileUpdated) {
     if (editor.GetDataAs<bool>("text_changed")) {
@@ -612,6 +679,13 @@ void TextEditorAppWindow::RenderRightMenubar() {
     CherryGUI::OpenPopup("SettingsMenuPopup");
   }
 
+  auto lspToggle = [this]() {
+    if (ImGui::Button("LSP")) {
+      demoLspBridge = !demoLspBridge;
+      toggleLspBridge();
+    }
+  };
+
   auto zoomRender = [this]() {
     int currentPercent = static_cast<int>(std::round(m_TextSize * 200.0f));
 
@@ -658,6 +732,7 @@ void TextEditorAppWindow::RenderRightMenubar() {
     auto cmp = CherryKit::TableSimple(
         CherryID("Parameters"), "ParamTable",
         {{CherryKit::KeyValCustom("Zoom", zoomRender)},
+         {CherryKit::KeyValCustom("Toogle lsp", lspToggle)},
          {CherryKit::KeyValBool("Auto refresh", &m_AutoRefresh)},
          {CherryKit::KeyValBool("Show spaces", &show_spaces_)},
          {CherryKit::KeyValBool("Show scrollbar minimap",

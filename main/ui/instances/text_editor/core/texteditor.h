@@ -2368,11 +2368,13 @@ public:
   TextAreaComponent(const Cherry::Identifier &id, float *width, float *height,
                     std::string *buffer, float *font_size, int *currentLine,
                     int *currentColumn, int *totalLines,
-                    std::string *currentLanguageDef, bool *canOverrite)
-      : Component(id), m_Width(width), m_Height(height), m_TextEditor(),
-        m_EditBuffer(buffer), m_FontSize(font_size), m_CurrentLine(currentLine),
+                    std::string *currentLanguageDef, bool *canOverrite,
+                    TextEditorInternal *editor)
+      : Component(id), m_Width(width), m_Height(height), m_EditBuffer(buffer),
+        m_FontSize(font_size), m_CurrentLine(currentLine),
         m_CurrentColumn(currentColumn), m_TotalLines(totalLines),
-        m_CurrentLanguageDef(currentLanguageDef), m_CanOverrite(canOverrite) {
+        m_CurrentLanguageDef(currentLanguageDef), m_CanOverrite(canOverrite),
+        m_TextEditor(editor) {
     // Identifier
     SetIdentifier(id);
     // Colors
@@ -2388,10 +2390,10 @@ public:
     SetData("save_ready", "false");
     SetData("text_changed", false);
 
-    // m_TextEditor.SetShowWhitespaces(false);
+    // m_TextEditor->SetShowWhitespaces(false);
 
     if (buffer) {
-      m_TextEditor.SetText(*buffer);
+      m_TextEditor->SetText(*buffer);
     }
   }
 
@@ -2403,18 +2405,18 @@ public:
 
     if (GetProperty("refresh_pending") == "true") {
       if (m_EditBuffer) {
-        m_TextEditor.SetText(*m_EditBuffer);
+        m_TextEditor->SetText(*m_EditBuffer);
         this->SetData("text_changed", false);
       }
       SetProperty("refresh_pending", "false");
     }
 
-    m_TextEditor.SetTransactionCallback(
+    m_TextEditor->SetTransactionCallback(
         [this](auto &changes) { this->SetData("text_changed", true); });
 
     if (GetProperty("save_pending") == "true") {
       if (m_EditBuffer) {
-        *m_EditBuffer = m_TextEditor.GetText();
+        *m_EditBuffer = m_TextEditor->GetText();
         SetData("save_ready", "true");
         this->SetData("text_changed", false);
       }
@@ -2422,89 +2424,89 @@ public:
     }
 
     if (GetProperty("undo_pending") == "true") {
-      if (m_TextEditor.CanUndo()) {
-        m_TextEditor.Undo();
+      if (m_TextEditor->CanUndo()) {
+        m_TextEditor->Undo();
       }
       SetProperty("undo_pending", false);
     }
 
     if (GetProperty("find_pending") == "true") {
-      m_TextEditor.OpenFindReplaceWindow();
+      m_TextEditor->OpenFindReplaceWindow();
       SetProperty("find_pending", false);
     }
 
     if (GetProperty("redo_pending") == "true") {
-      if (m_TextEditor.CanRedo()) {
-        m_TextEditor.Redo();
+      if (m_TextEditor->CanRedo()) {
+        m_TextEditor->Redo();
       }
       SetProperty("redo_pending", false);
     }
 
     if (GetProperty("copy_pending") == "true") {
-      m_TextEditor.Copy();
+      m_TextEditor->Copy();
       SetProperty("copy_pending", false);
     }
 
     if (GetProperty("paste_pending") == "true") {
-      m_TextEditor.Paste();
+      m_TextEditor->Paste();
       SetProperty("paste_pending", false);
     }
 
     auto language_name = GetProperty("language_name");
     if (language_name == "C++") {
-      m_TextEditor.SetLanguage(TextEditorInternal::Language::Cpp());
+      m_TextEditor->SetLanguage(TextEditorInternal::Language::Cpp());
     } else if (language_name == "C") {
-      m_TextEditor.SetLanguage(TextEditorInternal::Language::C());
+      m_TextEditor->SetLanguage(TextEditorInternal::Language::C());
     } else if (language_name == "Lua") {
-      m_TextEditor.SetLanguage(TextEditorInternal::Language::Lua());
+      m_TextEditor->SetLanguage(TextEditorInternal::Language::Lua());
     } else if (language_name == "C#") {
-      m_TextEditor.SetLanguage(TextEditorInternal::Language::Cs());
+      m_TextEditor->SetLanguage(TextEditorInternal::Language::Cs());
     } else if (language_name == "Python") {
-      m_TextEditor.SetLanguage(TextEditorInternal::Language::Python());
+      m_TextEditor->SetLanguage(TextEditorInternal::Language::Python());
     } else if (language_name == "Sql") {
-      m_TextEditor.SetLanguage(TextEditorInternal::Language::Sql());
+      m_TextEditor->SetLanguage(TextEditorInternal::Language::Sql());
     } else if (language_name == "Markdown") {
-      m_TextEditor.SetLanguage(TextEditorInternal::Language::Markdown());
+      m_TextEditor->SetLanguage(TextEditorInternal::Language::Markdown());
     } else if (language_name == "Json") {
-      m_TextEditor.SetLanguage(TextEditorInternal::Language::Json());
+      m_TextEditor->SetLanguage(TextEditorInternal::Language::Json());
     }
 
     if (GetProperty("show_spaces") == "true") {
-      m_TextEditor.SetShowSpacesEnabled(true);
+      m_TextEditor->SetShowSpacesEnabled(true);
     } else {
-      m_TextEditor.SetShowSpacesEnabled(false);
+      m_TextEditor->SetShowSpacesEnabled(false);
     }
 
     if (GetProperty("show_scrollbar_minimap") == "true") {
-      m_TextEditor.SetShowScrollbarMiniMapEnabled(true);
+      m_TextEditor->SetShowScrollbarMiniMapEnabled(true);
     } else {
-      m_TextEditor.SetShowScrollbarMiniMapEnabled(false);
+      m_TextEditor->SetShowScrollbarMiniMapEnabled(false);
     }
 
     if (GetProperty("show_minimap") == "true") {
-      m_TextEditor.SetShowMiniMapEnabled(true);
+      m_TextEditor->SetShowMiniMapEnabled(true);
     } else {
-      m_TextEditor.SetShowMiniMapEnabled(false);
+      m_TextEditor->SetShowMiniMapEnabled(false);
     }
 
     if (GetProperty("word_wrap") == "true") {
-      m_TextEditor.SetWordWrapEnabled(true);
+      m_TextEditor->SetWordWrapEnabled(true);
     } else {
-      m_TextEditor.SetWordWrapEnabled(false);
+      m_TextEditor->SetWordWrapEnabled(false);
     }
 
     if (GetProperty("line_folding") == "true") {
-      m_TextEditor.SetLineFoldingEnabled(true);
+      m_TextEditor->SetLineFoldingEnabled(true);
     } else {
-      m_TextEditor.SetLineFoldingEnabled(false);
+      m_TextEditor->SetLineFoldingEnabled(false);
     }
 
     if (m_FontSize)
       CherryStyle::PushFontSize(*m_FontSize);
 
-    m_TextEditor.Render("Area");
+    m_TextEditor->Render("Area");
 
-    auto cpos = m_TextEditor.GetCurrentCursorPosition();
+    auto cpos = m_TextEditor->GetCurrentCursorPosition();
 
     if (m_CurrentLine)
       *m_CurrentLine = cpos.line;
@@ -2513,13 +2515,13 @@ public:
       *m_CurrentColumn = 999;
 
     if (m_TotalLines)
-      *m_TotalLines = m_TextEditor.GetLineCount();
+      *m_TotalLines = m_TextEditor->GetLineCount();
 
     if (m_CurrentLanguageDef)
-      *m_CurrentLanguageDef = m_TextEditor.GetLanguageName();
+      *m_CurrentLanguageDef = m_TextEditor->GetLanguageName();
 
     if (m_CanOverrite)
-      *m_CanOverrite = m_TextEditor.CanUndo();
+      *m_CanOverrite = m_TextEditor->CanUndo();
 
     if (m_FontSize)
       CherryStyle::PopFontSize();
@@ -2538,7 +2540,7 @@ private:
   std::string *m_CurrentLanguageDef;
   bool *m_CanOverrite;
 
-  TextEditorInternal m_TextEditor;
+  TextEditorInternal *m_TextEditor;
   std::string *m_EditBuffer;
 
   std::function<std::string()> getBackendDebugInformation;
@@ -2549,19 +2551,20 @@ inline Component &TextArea(const Identifier &identifier, float *width,
                            float *height, std::string *buffer, float *font_size,
                            int *currentLine, int *currentColumn,
                            int *totalLines, std::string *currentLanguageDef,
-                           bool *canOverrite) {
+                           bool *canOverrite, TextEditorInternal *editor) {
   return CherryApp.PushComponent<TextAreaComponent>(
       identifier, width, height, buffer, font_size, currentLine, currentColumn,
-      totalLines, currentLanguageDef, canOverrite);
+      totalLines, currentLanguageDef, canOverrite, editor);
 }
 inline Component &TextArea(float *width, float *height, std::string *buffer,
                            float *font_size, int *currentLine,
                            int *currentColumn, int *totalLines,
-                           std::string *currentLanguageDef, bool *canOverrite) {
+                           std::string *currentLanguageDef, bool *canOverrite,
+                           TextEditorInternal *editor) {
   return ModuleUI::TextArea(
       Application::GenerateUniqueID(width, height, buffer, "TextArea"), width,
       height, buffer, font_size, currentLine, currentColumn, totalLines,
-      currentLanguageDef, canOverrite);
+      currentLanguageDef, canOverrite, editor);
 
 } // namespace ModuleUI
 } // namespace ModuleUI

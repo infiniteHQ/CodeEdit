@@ -85,6 +85,9 @@ public:
   void AutoSetLanguage();
 
   void PlusMinuxWidget(bool plus);
+
+  TextEditorInternal core_editor;
+
   float m_TextSize = 0.5f;
   float m_TextSizeMin = 0.3f;
   float m_TextSizeMax = 2.0f;
@@ -111,6 +114,10 @@ public:
     m_TextSize = 0.50f; // 100%
   }
 
+  void toggleTrieAutoComplete();
+
+  void toggleLspBridge();
+
 private:
   std::shared_ptr<VxContext> ctx;
   bool opened;
@@ -132,7 +139,18 @@ private:
   LspBridge lsp;
   static constexpr int lspOptions =
       LspBridge::autocomplete | LspBridge::showHoverHelp;
+  Notifications notifications;
 
+  bool demoTrieAutoComplete = false;
+  bool demoLspBridge = false;
+  bool showWordAtMouse = false;
+  bool showLineMarkers = false;
+  bool showLineDecorator = false;
+  bool showCustomCaret = false;
+  bool showContextMenus = false;
+  bool enableUnicodeLineBreakAlgorithm = false;
+  bool showDebugInformation = false;
+  bool showDebugWindow = false;
   // Editor flags
   bool m_SaveReady = false;
   bool m_RefreshReady = false;
