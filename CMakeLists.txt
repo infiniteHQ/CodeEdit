@@ -14,9 +14,11 @@ endif()
 
 
 find_library(VORTEX_SHARED_LIBRARY vortex_shared HINTS ${CMAKE_CURRENT_SOURCE_DIR}/lib/vortex/build/prod/)
+add_subdirectory(lib/lsp-framework)
 
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/lib/vortex/lib/spdlog/include")
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/lib/vortex/lib/cherry/lib/imgui")
+include_directories("${CMAKE_CURRENT_SOURCE_DIR}/lib/lsp-framework")
 
 if(NOT VORTEX_SHARED_LIBRARY)
     message(FATAL_ERROR "Please build/install the vortex core before compiling modules!")
@@ -31,11 +33,12 @@ if(UNIX AND NOT APPLE)
 target_compile_options(module PRIVATE -Wall -Wextra)
 endif()
 
-target_link_libraries(module PRIVATE ${VORTEX_SHARED_LIBRARY})
+target_link_libraries(module PRIVATE ${VORTEX_SHARED_LIBRARY} lsp)
 target_include_directories(module PUBLIC
 ${CMAKE_CURRENT_SOURCE_DIR}/lib/vortex/
 ${CMAKE_CURRENT_SOURCE_DIR}/lib/vortex/vxcore/include/
 ${CMAKE_CURRENT_SOURCE_DIR}/lib/vortex/lib/cherry
+${CMAKE_CURRENT_SOURCE_DIR}/lib/lsp-framework
 )
 
 if(WIN32)

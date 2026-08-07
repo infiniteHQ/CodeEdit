@@ -2540,6 +2540,8 @@ private:
 
   TextEditorInternal m_TextEditor;
   std::string *m_EditBuffer;
+
+  std::function<std::string()> getBackendDebugInformation;
 };
 
 namespace ModuleUI {

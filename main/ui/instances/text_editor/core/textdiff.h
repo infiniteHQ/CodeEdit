@@ -7,14 +7,6 @@
 
 #pragma once
 
-//	TextDiff - A syntax highlighting text diff widget for Dear ImGui.
-//	Copyright (c) 2024-2026 Johan A. Goossens. All rights reserved.
-//
-//	This work is licensed under the terms of the MIT license.
-//	For a copy, see <https://opensource.org/licenses/MIT>.
-
-#pragma once
-
 //
 //	Include files
 //

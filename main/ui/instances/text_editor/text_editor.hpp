@@ -1,5 +1,9 @@
 #pragma once
 #include "core/texteditor.h"
+#include "misc/lsp_bridge.h"
+#include "misc/notifications.h"
+#include "misc/trie_auto_complete.h"
+
 #include <vxcore/include/vortex.h>
 #include <vxcore/include/vortex_internals.h>
 
@@ -123,6 +127,11 @@ private:
   bool m_PastePending = false;
   bool m_FileEdited = true;
   bool m_FileUpdated = true;
+
+  TrieAutoComplete trieAutoComplete;
+  LspBridge lsp;
+  static constexpr int lspOptions =
+      LspBridge::autocomplete | LspBridge::showHoverHelp;
 
   // Editor flags
   bool m_SaveReady = false;

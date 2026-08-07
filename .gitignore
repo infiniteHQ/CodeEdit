@@ -2,3 +2,4 @@ build
 dist
 plugin_test
 plugin_test2
+test.cpp
