@@ -72,6 +72,7 @@ bool TextEditorInternal::render(const char *title, const ImVec2 &size,
   // start a new child window
   ImGui::SetNextWindowContentSize(totalSize);
   ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.0f, 0.0f));
+  ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 0.0f);
   ImGui::PushStyleColor(ImGuiCol_ChildBg, ImGui::ColorConvertU32ToFloat4(
                                               palette.get(Color::background)));
 
@@ -216,8 +217,8 @@ bool TextEditorInternal::render(const char *title, const ImVec2 &size,
     if (ImGui::GetIO().ConfigFlags & (ImGuiConfigFlags_NavEnableKeyboard |
                                       ImGuiConfigFlags_NavEnableGamepad)) {
       ImGuiContext &g = *GImGui;
-
-      if (ImGui::IsWindowFocused()) {
+      // TODO This is a blue edges focus, need change or remove
+      /*if (ImGui::IsWindowFocused()) {
         if (!ImGui::GetCurrentWindow()->ScrollbarY) {
           ImRect bb{ImGui::GetWindowPos(),
                     ImGui::GetWindowPos() + ImGui::GetWindowSize()};
@@ -238,12 +239,13 @@ bool TextEditorInternal::render(const char *title, const ImVec2 &size,
       } else {
         g.CurrentWindow->DC.NavLayersActiveMaskNext |=
             (1 << g.CurrentWindow->DC.NavLayerCurrent);
-      }
+      }*/
     }
   }
 
   ImGui::EndChild();
   ImGui::PopStyleColor();
+  ImGui::PopStyleVar();
   ImGui::PopStyleVar();
 
   // handle change tracking if there is a callback in place
