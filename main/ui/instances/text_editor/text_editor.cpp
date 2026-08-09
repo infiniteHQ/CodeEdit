@@ -464,9 +464,6 @@ void TextEditorAppWindow::toggleLspBridge() {
 }
 
 void TextEditorAppWindow::Render() {
-
-  vxe::push_custom_menu("TextEdit", [this]() { RenderCustomMenu(); });
-
   CherryApp.PushComponentPool(&m_ComponentPool);
   bool isWindowFocused =
       CherryGUI::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
