@@ -17,7 +17,7 @@
 //	TextDiff
 //
 
-class IMGUI_API TextDiff {
+class TextDiff {
 public:
   // constructor
   TextDiff();
