@@ -34,7 +34,7 @@ void TextEditorInternal::setText(const std::string_view &text) {
   cursors.clearAll();
   clearMarkers();
   clearSquiggles();
-  makeCursorVisible();
+  resetScrolling();
 }
 
 //
@@ -60,10 +60,16 @@ bool TextEditorInternal::render(const char *title, const ImVec2 &size,
       ImVec2(ImGui::CalcTextSize("#").x,
              ImGui::GetTextLineHeightWithSpacing() * config.lineSpacing);
 
-  // ensure editor has focus (if required)
-  if (!firstFrame && focusOnEditor) {
-    ImGui::SetNextWindowFocus();
-    focusOnEditor = false;
+  // special handling for first frame as we can't use SetNextWindowFocus during
+  // it
+  if (!firstFrame) {
+    // ensure editor has focus (if required)
+    if (focusOnEditor) {
+      ImGui::SetNextWindowFocus();
+      focusOnEditor = false;
+    }
+  } else {
+    firstFrame = false;
   }
 
   // track content state changes
@@ -77,9 +83,12 @@ bool TextEditorInternal::render(const char *title, const ImVec2 &size,
                                               palette.get(Color::background)));
 
   if (ImGui::BeginChild(title, size, border, windowFlags)) {
-    // make sure the focus is correct for navigation
-    if (firstFrame) {
-      firstFrame = false;
+    // perform last part of scrolling reset here (as it requires the correct
+    // Dear ImGui context)
+    if (resetDearImGuiScrolling) {
+      ImGui::SetScrollX(0.0f);
+      ImGui::SetScrollY(0.0f);
+      resetDearImGuiScrolling = false;
     }
 
     // determine current position and visible size
@@ -450,8 +459,7 @@ void TextEditorInternal::renderMatchingBracketLines() {
 //
 //	renderSquiggle
 //
-
-inline static void renderSquiggle(float left, float right, float top,
+static inline void renderSquiggle(float left, float right, float top,
                                   float bottom, float thickness, ImU32 color,
                                   const char *tooltip) {
   auto drawList = ImGui::GetWindowDrawList();
@@ -1111,7 +1119,7 @@ void TextEditorInternal::renderPopups() {
   }
 
   if (ImGui::IsPopupOpen("TextHoverPopup")) {
-    ImGui::SetNextWindowPos(popUpWindowPos, ImGuiCond_Always,
+    ImGui::SetNextWindowPos(popupWindowPos, ImGuiCond_Always,
                             ImVec2(0.0f, 1.0f));
 
     if (ImGui::BeginPopup("TextHoverPopup",
@@ -1748,7 +1756,7 @@ void TextEditorInternal::handleMouseInteractions() {
       popupDocPos = document.findWordStart(glyphPos, true);
       auto vizPos = docPos2VisPos(popupDocPos);
 
-      popUpWindowPos = ImVec2(vizPos.column * glyphSize.x + textLeftOffset +
+      popupWindowPos = ImVec2(vizPos.column * glyphSize.x + textLeftOffset +
                                   cursorScreenPos.x,
                               vizPos.row * glyphSize.y + cursorScreenPos.y);
 
@@ -1774,6 +1782,29 @@ void TextEditorInternal::handleMouseInteractions() {
       navigatingVertically = false;
     }
   }
+}
+
+//
+
+//	TextEditorInternal::resetScrolling
+
+//
+
+void TextEditorInternal::resetScrolling() {
+  // reset state related parameters
+  ensureVisiblePos = DocPos(invalidLine, 0);
+  scrollToLineNumber = invalidLine;
+  firstVisibleRow = 0;
+  lastVisibleRow = 0;
+  firstVisibleColumn = 0;
+  lastVisibleColumn = 0;
+  resetCursorAnimationTimer();
+
+  // we can't reset the Dear ImGui scrolling here as we don't necessarily have
+  // the right context
+
+  // so we just set a flag and the render function will handle it
+  resetDearImGuiScrolling = true;
 }
 
 //
@@ -2021,18 +2052,24 @@ TextEditorInternal::getCursorSelection(size_t cursor) const {
 //
 
 bool TextEditorInternal::isMousePosOverGlyph(const ImVec2 &mousePos) const {
-  // convert mouse position to screen coordinates
-  auto local = mousePos - cursorScreenPos;
-
-  // ignore negative coordinates
-  if (local.x < 0.0f || local.y < 0.0f) {
+  if (firstFrame) {
     return false;
-  }
+  } else {
+    // convert mouse position to screen coordinates
+    auto local = mousePos - cursorScreenPos;
 
-  // convert to visual position and check it
-  VisPos visPos(static_cast<size_t>(local.y / glyphSize.y),
-                static_cast<size_t>((local.x - textLeftOffset) / glyphSize.x));
-  return typeSetter.isVisPosOverGlyph(visPos);
+    // ignore negative coordinates
+    if (local.x < 0.0f || local.y < 0.0f) {
+      return false;
+    }
+
+    // convert to visual position and check it
+    VisPos visPos(
+        static_cast<size_t>(local.y / glyphSize.y),
+        static_cast<size_t>((local.x - textLeftOffset) / glyphSize.x));
+
+    return typeSetter.isVisPosOverGlyph(visPos);
+  }
 }
 
 //
@@ -2041,21 +2078,38 @@ bool TextEditorInternal::isMousePosOverGlyph(const ImVec2 &mousePos) const {
 
 TextEditorInternal::DocPos
 TextEditorInternal::getDocPosAtMousePos(const ImVec2 &mousePos) const {
-  // convert mouse position to screen coordinates
-  auto local = mousePos - cursorScreenPos;
+  if (firstFrame) {
+    return DocPos();
+  } else {
+    // convert mouse position to screen coordinates
+    auto local = mousePos - cursorScreenPos;
 
-  // ignore negative coordinates
-  if (local.y < 0.0f) {
-    return DocPos(0, 0);
+    // ignore negative coordinates
+    if (local.y < 0.0f) {
+      return DocPos(0, 0);
+    } else if (local.x < 0.0f) {
+      local.x = 0.0f;
+    }
 
-  } else if (local.x < 0.0f) {
-    local.x = 0.0f;
+    // convert to document position
+    VisPos visPos(
+        static_cast<size_t>(local.y / glyphSize.y),
+        static_cast<size_t>((local.x - textLeftOffset) / glyphSize.x));
+    return visPos2DocPos(normalizePos(visPos));
   }
-
-  // convert to document position
-  VisPos visPos(static_cast<size_t>(local.y / glyphSize.y),
-                static_cast<size_t>((local.x - textLeftOffset) / glyphSize.x));
-  return visPos2DocPos(normalizePos(visPos));
+}
+//
+//	TextEditorInternal::isMousePosOverTextArea
+//
+bool TextEditorInternal::isMousePosOverTextArea(const ImVec2 &mousePos) const {
+  if (firstFrame) {
+    return false;
+  } else {
+    // convert mouse position to screen coordinates
+    auto local = mousePos - cursorScreenPos;
+    return local.x > textLeftOffset && local.x < textRightOffset &&
+           local.y >= 0 && local.y < textSize.y;
+  }
 }
 
 //
@@ -2733,8 +2787,8 @@ void TextEditorInternal::deindentLines() {
     for (auto line = cursorStart.line; line <= cursorEnd.line; line++) {
       if ((!cursor->hasSelection() || DocPos(line, 0) != cursorEnd) &&
           document[line].size()) {
-        // determine how many whitespaces are available at the start with a max
-        // of tabSize columns
+        // determine how many whitespaces are available at the start with a
+        // max of tabSize columns
         size_t column = 0;
         size_t index = 0;
 
@@ -7632,11 +7686,8 @@ static inline TextEditorInternal::BreakOption lb4(const LineBreakState &state) {
 }
 
 static inline TextEditorInternal::BreakOption lb5(const LineBreakState &state) {
-  // LB5: treat CR followed by LF, as well as CR, LF, and NL as hard line breaks
-  // CR × LF
-  // CR !
-  // LF !
-  // NL !
+  // LB5: treat CR followed by LF, as well as CR, LF, and NL as hard line
+  // breaks CR × LF CR ! LF ! NL !
   switch (state.current.cls) {
   case LBC::cr:
     if (state.next.cls == LBC::lf) {
@@ -7746,8 +7797,9 @@ lb8a(const LineBreakState &state) {
 }
 
 static inline TextEditorInternal::BreakOption lb9(LineBreakState &state) {
-  // LB9: do not break a combining character sequence; treat it as if it has the
-  // line breaking class of the base character in all of the following rules
+  // LB9: do not break a combining character sequence; treat it as if it has
+  // the line breaking class of the base character in all of the following
+  // rules
   static const std::unordered_set<LBC> BKCRLFNLSPZW = {
       LBC::bk, LBC::cr, LBC::lf, LBC::nl, LBC::sp, LBC::zw};
 
@@ -7803,8 +7855,8 @@ lb12(const LineBreakState &state) {
 
 static inline TextEditorInternal::BreakOption
 lb12a(const LineBreakState &state) {
-  // LB12a: do not break before NBSP and related characters, except after spaces
-  // and hyphens
+  // LB12a: do not break before NBSP and related characters, except after
+  // spaces and hyphens
   // [^SP BA HY HH] × GL
   if (state.next.cls == LBC::gl) {
     switch (state.current.cls) {
@@ -7877,15 +7929,15 @@ static inline TextEditorInternal::BreakOption lb15a(LineBreakState &state) {
 
 static inline TextEditorInternal::BreakOption
 lb15b(const LineBreakState &state) {
-  // LB15b: do not break before an unresolved final punctuation that lies at the
-  // end of the line, before a space, before a prohibited break, or before an
-  // unresolved quotation mark, even after spaces
+  // LB15b: do not break before an unresolved final punctuation that lies at
+  // the end of the line, before a space, before a prohibited break, or before
+  // an unresolved quotation mark, even after spaces
   static const std::unordered_set<LBC> SPGLWJCLQUCPEXISSYBKCRLFNLZW = {
       LBC::sp, LBC::gl, LBC::wj, LBC::cl, LBC::qu, LBC::cp, LBC::ex,
       LBC::is, LBC::sy, LBC::bk, LBC::cr, LBC::lf, LBC::nl, LBC::zw};
 
-  // × [\p{Pf}&QU] ( SP | GL | WJ | CL | QU | CP | EX | IS | SY | BK | CR | LF |
-  // NL | ZW | eot)
+  // × [\p{Pf}&QU] ( SP | GL | WJ | CL | QU | CP | EX | IS | SY | BK | CR | LF
+  // | NL | ZW | eot)
   if (isPf(state.next.codepoint) && state.next.cls == LBC::qu) {
     auto after = state.getClass(state.next.pos + 1);
 
@@ -7994,9 +8046,9 @@ lb18(const LineBreakState &state) {
 
 static inline TextEditorInternal::BreakOption
 lb19(const LineBreakState &state) {
-  // LB19: do not break before non-initial unresolved quotation marks, such as ‘
-  // ” ’ or ‘ " ’, nor after non-final unresolved quotation marks, such as ‘ “ ’
-  // ‘ " ’ × [ QU - \p{Pi} ]
+  // LB19: do not break before non-initial unresolved quotation marks, such as
+  // ‘ ” ’ or ‘ " ’, nor after non-final unresolved quotation marks, such as ‘
+  // “ ’ ‘ " ’ × [ QU - \p{Pi} ]
   if ((state.next.cls == LBC::qu) && !isPi(state.next.codepoint)) {
     // Gc=Pi is initial punctuation
     return TextEditorInternal::BreakOption::noBreak;
@@ -8013,7 +8065,8 @@ lb19(const LineBreakState &state) {
 
 static inline TextEditorInternal::BreakOption
 lb19a(const LineBreakState &state) {
-  // LB19a: unless surrounded by East Asian characters, do not break either side
+  // LB19a: unless surrounded by East Asian characters, do not break either
+  // side
   // [^$EastAsian] × QU
   if (!TextEditorInternal::CodePoint::isEastAsian(state.current.codepoint) &&
       (state.next.cls == LBC::qu)) {
@@ -8082,8 +8135,8 @@ lb20a(const LineBreakState &state) {
 
 static inline TextEditorInternal::BreakOption
 lb21(const LineBreakState &state) {
-  // LB21: do not break before hyphen-minus, other hyphens, fixed-width spaces,
-  // small kana, and other non-starters, or after acute accents BB ×
+  // LB21: do not break before hyphen-minus, other hyphens, fixed-width
+  // spaces, small kana, and other non-starters, or after acute accents BB ×
   if (state.current.cls == LBC::bb) {
     return TextEditorInternal::BreakOption::noBreak;
   }
@@ -8210,8 +8263,8 @@ lb24(const LineBreakState &state) {
 static inline TextEditorInternal::BreakOption
 lb25(const LineBreakState &state) {
   // LB25: do not break numbers
-  // approach: find the end of a matching run, then no-break everything as we go
-  // past it
+  // approach: find the end of a matching run, then no-break everything as we
+  // go past it
   static const std::unordered_set<LBC> POPR = {LBC::po, LBC::pr};
   static const std::unordered_set<LBC> CLCP = {LBC::cl, LBC::cp};
 
@@ -8484,15 +8537,16 @@ static inline TextEditorInternal::BreakOption lb30a(LineBreakState &state) {
 
 static inline TextEditorInternal::BreakOption
 lb30b(const LineBreakState &state) {
-  // LB30b: do not break between an emoji base (or potential emoji) and an emoji
-  // modifier EB × EM
+  // LB30b: do not break between an emoji base (or potential emoji) and an
+  // emoji modifier EB × EM
   if ((state.current.cls == LBC::eb) && (state.next.cls == LBC::em)) {
     return TextEditorInternal::BreakOption::noBreak;
   }
 
 #if defined(IMGUI_USE_WCHAR32)
   // [\p{Extended_Pictographic}&\p{Cn}] × EM
-  // if (state.next.cls == LBC::em && (/^\p{ExtPict}$/u.test(state.cur.char)) &&
+  // if (state.next.cls == LBC::em && (/^\p{ExtPict}$/u.test(state.cur.char))
+  // &&
   // (/^\p{gc=Cn}$/u.test(state.cur.char))) { 	return
   // TextEditorInternal::BreakOption::noBreak;
   // }
@@ -8677,8 +8731,8 @@ bool TextEditorInternal::LineFold::update(const Config &config,
     updated = true;
   }
 
-  // (re)build list of folding opportunities (if feature is on and updates have
-  // occurred)
+  // (re)build list of folding opportunities (if feature is on and updates
+  // have occurred)
   if (lineFolding && updated) {
     std::unordered_set<size_t> previouslyFolded;
     clear();
@@ -8837,8 +8891,8 @@ void TextEditorInternal::TypeSetter::wrapLine(Line &line) {
     // handle hard break
     if (line[i].breakOption == BreakOption::mustBreak) {
       // this can't happen in the editor as hard breaks have already been
-      // handled code is however left here in case we want to reuse it somewhere
-      // else later
+      // handled code is however left here in case we want to reuse it
+      // somewhere else later
       line.rows++;
       sections.emplace_back(lastBreakIndex, i, columns, indent);
 
@@ -9160,9 +9214,9 @@ void TextEditorInternal::TypeSetter::screenPos2DocPos(const Document &document,
                                                       DocPos &glyphPos,
                                                       DocPos &cursorPos) const {
   // the returned glyphPos addresses the glyph pointed to by the screenPos
-  // parameter (row and column in floating point format) the returned cursorPos
-  // returns the closest cursor position (which can be at the start or the end
-  // of the glyph)
+  // parameter (row and column in floating point format) the returned
+  // cursorPos returns the closest cursor position (which can be at the start
+  // or the end of the glyph)
   size_t colNo = static_cast<size_t>(screenPos.x);
   size_t rowNo = static_cast<size_t>(screenPos.y);
 
@@ -9232,7 +9286,10 @@ void TextEditorInternal::TypeSetter::screenPos2DocPos(const Document &document,
       auto leftDiff = screenPos.x - static_cast<float>(leftColumn);
       auto rightDiff = static_cast<float>(rightColumn) - screenPos.x;
 
-      glyphPos = DocPos(row.line, index - 1);
+      // when the loop above didn't run (e.g. on an empty line), there is no
+      // glyph before this position
+      glyphPos =
+          DocPos(row.line, leftColumn == rightColumn ? index : index - 1);
       cursorPos = DocPos(row.line, leftDiff <= rightDiff ? index - 1 : index);
     }
   }
@@ -11811,7 +11868,8 @@ std::string_view::const_iterator
 TextEditorInternal::CodePoint::read(std::string_view::const_iterator i,
                                     std::string_view::const_iterator end,
                                     ImWchar *codepoint) {
-  // parse a UTF-8 sequence into a unicode codepoint and return updated iterator
+  // parse a UTF-8 sequence into a unicode codepoint and return updated
+  // iterator
   if (i < end && (uch(*i) & 0x80) == 0) {
     *codepoint = uch(*i);
     ++i;
