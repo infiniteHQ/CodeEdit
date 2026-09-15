@@ -1785,9 +1785,7 @@ void TextEditorInternal::handleMouseInteractions() {
 }
 
 //
-
 //	TextEditorInternal::resetScrolling
-
 //
 
 void TextEditorInternal::resetScrolling() {
@@ -5593,8 +5591,6 @@ void TextEditorInternal::selectAllOccurrencesOf(const std::string_view &text,
         cursors.addCursor(nextStart, nextEnd);
       }
     }
-
-    makeCursorVisible();
 
   } else {
     cursors.clearAdditional(true);
