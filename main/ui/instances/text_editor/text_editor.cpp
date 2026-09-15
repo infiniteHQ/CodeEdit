@@ -626,6 +626,12 @@ void TextEditorAppWindow::Render() {
     }
   }
 
+  if (show_doc_pos_at_mouse_) {
+    editor.SetProperty("show_doc_pos_at_mouse", "true");
+  } else {
+    editor.SetProperty("show_doc_pos_at_mouse", "false");
+  }
+
   if (show_spaces_) {
     editor.SetProperty("show_spaces", "true");
   } else {
@@ -742,6 +748,8 @@ void TextEditorAppWindow::RenderRightMenubar() {
          {CherryKit::KeyValBool("Show spaces", &show_spaces_)},
          {CherryKit::KeyValBool("Show scrollbar minimap",
                                 &show_scrollbar_minimap_)},
+         {CherryKit::KeyValBool("Show Doc pos at mouse",
+                                &show_doc_pos_at_mouse_)},
          {CherryKit::KeyValBool("Show Minimap", &show_minimap_)},
          {CherryKit::KeyValBool("Word wrapping", &word_wrap_)},
          {CherryKit::KeyValBool("Line Folding", &line_folding_)}});

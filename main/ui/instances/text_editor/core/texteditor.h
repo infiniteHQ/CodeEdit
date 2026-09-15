@@ -1478,6 +1478,8 @@ protected:
         std::function<void(const std::string &identifier)> callback) const;
 
     // utility functions
+    bool isWordStart(DocPos pos) const;
+    bool isWordEnd(DocPos pos) const;
     bool isWholeWord(DocPos start, DocPos end) const;
     inline bool isEndOfLine(DocPos from) const {
       return from.index == at(from.line).size();
@@ -2486,6 +2488,13 @@ public:
       m_TextEditor->SetLanguage(TextEditorInternal::Language::Json());
     }
 
+    bool show_doc_pos_at_mouse = false;
+    if (GetProperty("show_doc_pos_at_mouse") == "true") {
+      show_doc_pos_at_mouse = true;
+    } else {
+      show_doc_pos_at_mouse = false;
+    }
+
     if (GetProperty("show_spaces") == "true") {
       m_TextEditor->SetShowSpacesEnabled(true);
     } else {
@@ -2520,6 +2529,24 @@ public:
       CherryStyle::PushFontSize(*m_FontSize);
 
     m_TextEditor->Render("Area");
+
+    // support show docpos at mouse
+    std::string docPosStatus;
+    if (show_doc_pos_at_mouse) {
+      auto mousePos = ImGui::GetMousePos();
+      if (m_TextEditor->IsMousePosOverTextArea(mousePos)) {
+        if (m_TextEditor->IsMousePosOverGlyph(mousePos) ||
+            ImGui::IsKeyDown(ImGuiKey_ModShift)) {
+          auto docPos = m_TextEditor->GetDocPosAtMousePos(mousePos);
+
+          docPosStatus =
+              std::format("MousePos: {}, {}. DocPos: {}, {}  ", mousePos.x,
+                          mousePos.x, docPos.line, docPos.index);
+        }
+      }
+    }
+
+    // TODO: docPosStatus on editor
 
     auto cpos = m_TextEditor->GetCurrentCursorPosition();
 

@@ -145,7 +145,6 @@ private:
   bool demoTrieAutoComplete = false;
   bool demoLspBridge = false;
   bool showWordAtMouse = false;
-  bool showTextHover = false;
   bool showLineMarkers = false;
   bool showLineDecorator = false;
   bool showCustomCaret = false;
@@ -163,6 +162,7 @@ private:
   bool show_minimap_ = false;
   bool word_wrap_ = false;
   bool line_folding_ = false;
+  bool show_doc_pos_at_mouse_ = false;
   std::filesystem::file_time_type m_LastWriteTime{};
 
   // Cherry

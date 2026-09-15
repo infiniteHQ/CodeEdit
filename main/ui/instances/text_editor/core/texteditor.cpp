@@ -1679,9 +1679,16 @@ void TextEditorInternal::handleMouseInteractions() {
           // select "word" if it wasn't a bracketed section
           // includes whitespace and operator sequences as well
           if (!handled && !document.isEndOfLine(glyphPos)) {
-            auto start = document.findWordStart(glyphPos);
-            auto end = document.findWordEnd(glyphPos);
-            cursors.updateCurrentCursor(start, end);
+            if (document.isWordStart(glyphPos)) {
+              cursors.updateCurrentCursor(glyphPos,
+                                          document.findWordEnd(glyphPos));
+            } else if (document.isWordEnd(glyphPos)) {
+              cursors.updateCurrentCursor(document.findWordStart(glyphPos),
+                                          glyphPos);
+            } else {
+              cursors.updateCurrentCursor(document.findWordStart(glyphPos),
+                                          document.findWordEnd(glyphPos));
+            }
           }
         }
 
@@ -4356,9 +4363,7 @@ bool TextEditorInternal::Document::isWholeWord(DocPos start, DocPos end) const {
     return false;
 
   } else {
-    auto wordStart = findWordStart(DocPos(start.line, start.index + 1));
-    auto wordEnd = findWordEnd(DocPos(end.line, end.index - 1));
-    return start == wordStart && end == wordEnd;
+    return isWordStart(start) && isWordEnd(end);
   }
 }
 
@@ -8767,6 +8772,30 @@ bool TextEditorInternal::LineFold::update(const Config &config,
   }
 
   return updated;
+}
+
+//
+//	TextEditor::Document::isWordStart
+//
+bool TextEditorInternal::Document::isWordStart(DocPos pos) const {
+  if (isEndOfLine(pos)) {
+    return false;
+  } else {
+    auto wordStart = findWordStart(DocPos(pos.line, pos.index + 1));
+    return pos == wordStart;
+  }
+}
+
+//
+//	TextEditor::Document::isWordEnd
+//
+bool TextEditorInternal::Document::isWordEnd(DocPos pos) const {
+  if (pos.index == 0) {
+    return false;
+  } else {
+    auto wordEnd = findWordEnd(DocPos(pos.line, pos.index - 1));
+    return pos == wordEnd;
+  }
 }
 
 //
