@@ -228,6 +228,9 @@ public:
   // access text (using UTF-8 encoded strings)
   // (see note below on cursor and scroll manipulation after setting new text)
   inline void SetText(const std::string_view &text) { setText(text); }
+  inline void SetText(const std::vector<std::string_view> &lines) {
+    setText(lines);
+  }
   inline std::string GetText() const { return document.getText(); }
 
   inline std::string GetCursorText(size_t cursor) const {
@@ -620,7 +623,7 @@ public:
     bool caretVisible;
 
     // color of cursor caret as per the current palette
-    // that can also be ignored if custom caret has its own palette of animation
+    // this can also be ignored if custom caret has its own palette or animation
     ImU32 caretColor;
 
     // index of the cursor being rendered (in case additional cursor information
@@ -629,12 +632,53 @@ public:
   };
 
   inline void SetCustomCaretRenderer(
-      std::function<void(const CustomCaret &caret)> callback) {
+      std::function<void(const CustomCaret &data)> callback) {
     customCaretCallback = callback;
   }
   inline void ClearCustomCaretRenderer() { customCaretCallback = nullptr; }
   inline bool HasCustomCaretRenderer() const {
     return customCaretCallback != nullptr;
+  }
+
+  // custom line number renderer
+  struct CustomLineNumber {
+    // draw list to submit rendering commands to
+    ImDrawList *drawList;
+
+    // top left corner of line number box
+    // can be used directly to submit drawing commands
+    ImVec2 pos;
+
+    // visible size of line number box in pixels
+    ImVec2 size;
+
+    // width of line number box in glyphs (this is variable)
+    // the editor calculates the number of digits required for the highest line
+    // number
+    size_t digits;
+
+    // line number to be rendered (zero-based)
+    size_t lineNumber;
+
+    // line number for current cursor (zero-based)
+    size_t cursorLineNumber;
+
+    // line number color from current palette
+    // this can be ignored if custom renderer has its own palette or animation
+    ImU32 color;
+  };
+
+  inline void SetCustomLineNumberRenderer(
+      std::function<void(const CustomLineNumber &data)> callback) {
+    customLineNumberCallback = callback;
+  }
+
+  inline void ClearCustomLineNumberRenderer() {
+    customLineNumberCallback = nullptr;
+  }
+
+  inline bool HasCustomLineNumberRenderer() const {
+    return customLineNumberCallback != nullptr;
   }
 
   // setup right click or hover callbacks
@@ -1415,7 +1459,7 @@ protected:
     // manipulate document text (strings should be UTF-8 encoded)
     void setText(const Config &config, const std::string_view &text);
     void setText(const Config &config,
-                 const std::vector<std::string_view> &text);
+                 const std::vector<std::string_view> &lines);
     DocPos insertText(const Config &config, DocPos start,
                       const std::string_view &text);
     void deleteText(const Config &config, DocPos start, DocPos end);
@@ -2082,6 +2126,7 @@ protected:
 
   // access the editor's text
   void setText(const std::string_view &text);
+  void setText(const std::vector<std::string_view> &lines);
 
   // render (parts of) the text editor
   bool render(const char *title, const ImVec2 &size,
@@ -2335,6 +2380,7 @@ protected:
   std::function<void(Decorator &)> decoratorCallback;
 
   std::function<void(const CustomCaret &)> customCaretCallback;
+  std::function<void(const CustomLineNumber &)> customLineNumberCallback;
 
   std::function<void(PopupData &data)> lineNumberContextMenuCallback;
   std::function<void(PopupData &data)> textContextMenuCallback;

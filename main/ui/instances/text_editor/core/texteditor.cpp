@@ -777,22 +777,48 @@ void TextEditorInternal::renderLineNumberMarkers() {
 
 void TextEditorInternal::renderLineNumbers() {
   if (config.showLineNumbers) {
-    auto drawList = ImGui::GetWindowDrawList();
-    auto curserRow =
-        docPos2VisPos(cursors.getCurrent().getInteractiveEnd()).row;
-    auto position = ImVec2(ImGui::GetWindowPos().x + lineNumberRightOffset,
-                           cursorScreenPos.y);
+    if (customLineNumberCallback) {
+      auto position = ImVec2(ImGui::GetWindowPos().x + lineNumberLeftOffset,
+                             cursorScreenPos.y);
+      auto curserLine = cursors.getCurrent().getInteractiveEnd().line;
+      CustomLineNumber data;
+      data.drawList = ImGui::GetWindowDrawList();
 
-    for (size_t i = firstVisibleRow; i <= lastVisibleRow; i++) {
-      if (typeSetter[i].section == 0) {
-        auto lineNo = typeSetter[i].line + 1;
-        auto width =
-            static_cast<size_t>(std::log10(lineNo) + 1.0f) * glyphSize.x;
-        auto foreground =
-            (i == curserRow) ? Color::currentLineNumber : Color::lineNumber;
-        auto number = std::to_string(lineNo);
-        drawList->AddText(position + ImVec2(-width, i * glyphSize.y),
-                          palette.get(foreground), number.c_str());
+      auto width = lineNumberRightOffset - lineNumberLeftOffset;
+      data.size = data.pos + ImVec2(width, glyphSize.y);
+      data.digits = static_cast<size_t>(width / glyphSize.x);
+      data.cursorLineNumber = cursors.getCurrent().getInteractiveEnd().line;
+
+      for (size_t i = firstVisibleRow; i <= lastVisibleRow; i++) {
+        if (typeSetter[i].section == 0) {
+          data.pos = position + ImVec2(0.0f, i * glyphSize.y);
+          data.lineNumber = typeSetter[i].line;
+          auto foreground = (data.lineNumber == curserLine)
+                                ? Color::currentLineNumber
+                                : Color::lineNumber;
+          data.color = palette.get(foreground);
+          customLineNumberCallback(data);
+        }
+      }
+
+    } else {
+      auto drawList = ImGui::GetWindowDrawList();
+      auto curserLine = cursors.getCurrent().getInteractiveEnd().line;
+      auto position = ImVec2(ImGui::GetWindowPos().x + lineNumberRightOffset,
+                             cursorScreenPos.y);
+
+      for (size_t i = firstVisibleRow; i <= lastVisibleRow; i++) {
+        if (typeSetter[i].section == 0) {
+          auto lineNo = typeSetter[i].line + 1;
+          auto width =
+              static_cast<size_t>(std::log10(lineNo) + 1.0f) * glyphSize.x;
+          auto foreground = (typeSetter[i].line == curserLine)
+                                ? Color::currentLineNumber
+                                : Color::lineNumber;
+          auto number = std::to_string(lineNo);
+          drawList->AddText(position + ImVec2(-width, i * glyphSize.y),
+                            palette.get(foreground), number.c_str());
+        }
       }
     }
   }
@@ -3746,13 +3772,13 @@ void TextEditorInternal::Document::setText(const Config &config,
 //
 
 void TextEditorInternal::Document::setText(
-    const Config &config, const std::vector<std::string_view> &text) {
+    const Config &config, const std::vector<std::string_view> &lines) {
   // reset document
   clearDocument();
 
-  if (text.size()) {
+  if (lines.size()) {
     // process input UTF-8 and generate lines of glyphs
-    for (const auto &line : text) {
+    for (const auto &line : lines) {
       appendLine();
       auto i = line.begin();
       auto end = line.end();
@@ -8786,7 +8812,7 @@ bool TextEditorInternal::LineFold::update(const Config &config,
 }
 
 //
-//	TextEditor::Document::isWordStart
+//	TextEditorInternal::Document::isWordStart
 //
 bool TextEditorInternal::Document::isWordStart(DocPos pos,
                                                bool wordOnly) const {
@@ -8817,7 +8843,7 @@ bool TextEditorInternal::Document::isWordStart(DocPos pos,
 }
 
 //
-//	TextEditor::Document::isWordEnd
+//	TextEditorInternal::Document::isWordEnd
 //
 bool TextEditorInternal::Document::isWordEnd(DocPos pos, bool wordOnly) const {
   auto &line = at(pos.line);
@@ -9630,9 +9656,11 @@ bool TextEditorInternal::AutoComplete::render(
       // do we have any suggestions
       if (suggestions) {
         auto items = state.suggestions.size();
+        auto scroll = false;
 
         // apply arrow keys to selected suggestion
         if (ImGui::IsKeyPressed(ImGuiKey_UpArrow)) {
+          scroll = true;
           if (currentSelection == 0) {
             currentSelection = items - 1;
 
@@ -9641,6 +9669,7 @@ bool TextEditorInternal::AutoComplete::render(
           }
 
         } else if (ImGui::IsKeyPressed(ImGuiKey_DownArrow)) {
+          scroll = true;
           if (currentSelection == items - 1) {
             currentSelection = 0;
 
@@ -9669,8 +9698,8 @@ bool TextEditorInternal::AutoComplete::render(
           // scroll list to selected item (if required)
           auto selected = i == currentSelection;
 
-          if (selected) {
-            ImGui::SetScrollHereY(1.0f);
+          if (scroll && selected) {
+            ImGui::SetScrollHereY(0.5f);
           }
 
           if (renderSuggestion(state.suggestions[i].c_str(), state.searchTerm,
@@ -9697,6 +9726,19 @@ bool TextEditorInternal::AutoComplete::render(
   }
 
   return result;
+}
+
+//
+//	TextEditorInternal::setText
+//
+void TextEditorInternal::setText(const std::vector<std::string_view> &lines) {
+  // load text into document and reset overlays
+  document.setText(config, lines);
+  transactions.reset();
+  cursors.clearAll();
+  clearMarkers();
+  clearSquiggles();
+  resetScrolling();
 }
 
 //
