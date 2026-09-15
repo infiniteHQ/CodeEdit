@@ -18,6 +18,33 @@
 #include "texteditor.h"
 
 //
+//	glyph columns reserved on the monospace grid
+//
+//	East Asian wide/fullwidth codepoints (CJK, Hangul, Kana, fullwidth
+//	forms, emoji) render about two cells wide in the fonts that carry
+//	them; reserving two grid cells keeps them from overprinting their
+//	neighbours. Ranges follow Unicode East Asian Width wide/fullwidth.
+//
+
+static size_t glyphColumns(uint32_t codepoint) {
+  if ((codepoint >= 0x1100 && codepoint <= 0x115F)    // Hangul Jamo
+      || (codepoint >= 0x2E80 && codepoint <= 0xA4CF) // CJK radicals .. Yi
+      || (codepoint >= 0xAC00 && codepoint <= 0xD7A3) // Hangul syllables
+      || (codepoint >= 0xF900 &&
+          codepoint <= 0xFAFF) // CJK compatibility ideographs
+      || (codepoint >= 0xFE30 && codepoint <= 0xFE4F) // CJK compatibility forms
+      || (codepoint >= 0xFF00 && codepoint <= 0xFF60) // fullwidth forms
+      || (codepoint >= 0xFFE0 && codepoint <= 0xFFE6) // fullwidth signs
+      || (codepoint >= 0x1F300 && codepoint <= 0x1FAFF) // emoji
+      ||
+      (codepoint >= 0x20000 && codepoint <= 0x3FFFD)) { // CJK extension planes
+    return 2;
+  } else {
+    return 1;
+  }
+}
+
+//
 //	TextEditorInternal::TextEditorInternal
 //
 
@@ -567,7 +594,7 @@ void TextEditorInternal::renderSquiggles() {
 
           // handle regular glyphs
         } else {
-          column++;
+          column += glyphColumns(codepoint);
         }
       }
 
@@ -663,7 +690,7 @@ void TextEditorInternal::renderText() {
                            palette.get(glyph.color), codepoint);
         }
 
-        column++;
+        column += glyphColumns(codepoint);
       }
     }
 
@@ -9017,7 +9044,7 @@ void TextEditorInternal::TypeSetter::wrapLine(Line &line) {
 
       // update column count
       columns = (codepoint == '\t') ? ((columns / tabSize) + 1) * tabSize
-                                    : columns + 1;
+                                    : columns + glyphColumns(codepoint);
 
       if (columns < wordWrapColumns) {
         // we're not at the end of the row yet so we have to track any break
@@ -9216,7 +9243,7 @@ TextEditorInternal::TypeSetter::docPos2VisPos(const Document &document,
         for (auto glyph = start; glyph < end; glyph++) {
           visPos.column = (glyph->codepoint == '\t')
                               ? ((visPos.column / tabSize) + 1) * tabSize
-                              : visPos.column + 1;
+                              : visPos.column + glyphColumns(codepoint);
         }
 
         done = true;
@@ -9233,7 +9260,7 @@ TextEditorInternal::TypeSetter::docPos2VisPos(const Document &document,
     for (auto glyph = line.begin(); glyph < end; glyph++) {
       visPos.column = (glyph->codepoint == '\t')
                           ? ((visPos.column / tabSize) + 1) * tabSize
-                          : visPos.column + 1;
+                          : visPos.column + glyphColumns(codepoint);
     }
   }
 
@@ -9286,7 +9313,7 @@ TextEditorInternal::TypeSetter::visPos2DocPos(const Document &document,
     leftColumn = rightColumn;
     rightColumn = (glyph->codepoint == '\t')
                       ? ((rightColumn / tabSize) + 1) * tabSize
-                      : rightColumn + 1;
+                      : rightColumn + glyphColumns(codepoint);
     index++;
   }
 
@@ -9376,7 +9403,7 @@ void TextEditorInternal::TypeSetter::screenPos2DocPos(const Document &document,
         leftColumn = rightColumn;
         rightColumn = (glyph->codepoint == '\t')
                           ? ((rightColumn / tabSize) + 1) * tabSize
-                          : rightColumn + 1;
+                          : rightColumn + glyphColumns(codepoint);
         index++;
       }
 

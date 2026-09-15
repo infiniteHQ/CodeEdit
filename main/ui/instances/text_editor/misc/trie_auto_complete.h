@@ -1,5 +1,6 @@
 //	TextEditorInternal - A syntax highlighting text editor for Dear ImGui.
 //	Copyright (c) 2024-2026 Johan A. Goossens. All rights reserved.
+//	Copyright (c) 2026 Diego Moreno. All rights reserved.
 //
 //	This work is licensed under the terms of the MIT license.
 //	For a copy, see <https://opensource.org/licenses/MIT>.
@@ -7,6 +8,10 @@
 //
 //	Include files
 //
+
+#pragma once
+#ifndef TrieAutoComplete
+#define TrieAutoComplete
 
 #include <memory>
 #include <string>
@@ -20,8 +25,8 @@
 //	TrieAutoComplete
 //
 //	This is a utility class that can be connected to an TextEditorInternal
-//instance 	and it will provide simple autocomplete features based on the
-//language 	set in the editor and identifiers contained in the text.
+// instance 	and it will provide simple autocomplete features based on the
+// language 	set in the editor and identifiers contained in the text.
 //
 //	This feature is not context aware and for that, you should connect
 //	to a language server using the LspBridge class also contained in this
@@ -101,3 +106,5 @@ private:
     void addCandidates(const Node *node, size_t cost);
   } trie;
 };
+
+#endif
